@@ -1,0 +1,4 @@
+result
+result-*
+# ISOs from `make iso`
+out/
