@@ -15,6 +15,7 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       disko,
       agenix,
@@ -35,22 +36,50 @@
         ./hosts/${name}
         { networking.hostName = name; }
       ];
+      mkHost =
+        modules:
+        nixpkgs.lib.nixosSystem {
+          modules = modules ++ [ { nixpkgs.hostPlatform = system; } ];
+        };
+
+      # An ISO that installs `target` (a nixosSystem) onto a blank disk at boot.
+      mkInstaller =
+        target:
+        mkHost [
+          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+          ./installer
+          { machine.installer.target = target; }
+        ];
+
+      forHosts = f: nixpkgs.lib.mergeAttrsList (map f hosts);
     in
     {
-      nixosConfigurations = nixpkgs.lib.genAttrs hosts (
-        name:
-        nixpkgs.lib.nixosSystem {
-          modules = hostModules name ++ [ { nixpkgs.hostPlatform = system; } ];
-        }
-      );
+      nixosConfigurations = nixpkgs.lib.genAttrs hosts (name: mkHost (hostModules name));
 
-      checks.${system} = nixpkgs.lib.genAttrs hosts (
-        name:
-        import ./tests/host.nix {
+      packages.${system} = forHosts (name: {
+        "${name}-installer" = (mkInstaller self.nixosConfigurations.${name}).config.system.build.isoImage;
+      });
+
+      checks.${system} = forHosts (name: {
+        ${name} = import ./tests/host.nix {
           inherit pkgs name;
           modules = hostModules name;
-        }
-      );
+        };
+        # Same installer, but the system it installs has the VM test overrides and
+        # the test driver's backdoor so the test can inspect it after it reboots.
+        "${name}-installer" = import ./tests/installer.nix {
+          inherit pkgs name;
+          installer = mkInstaller (
+            mkHost (
+              hostModules name
+              ++ [
+                ./tests/vm.nix
+                "${nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
+              ]
+            )
+          );
+        };
+      });
 
       formatter.${system} = pkgs.nixfmt;
     };
