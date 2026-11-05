@@ -1,5 +1,5 @@
 # TrueNAS SCALE VM: KVM/QEMU with UEFI firmware and a VirtIO zvol as its disk.
-{ modulesPath, ... }:
+{ modulesPath, pkgs, ... }:
 
 {
   imports = [
@@ -19,4 +19,14 @@
     "console=ttyS0,115200"
   ];
 
+  # Hand deleted blocks back to the zvol, or it only ever grows on the TrueNAS side.
+  services.fstrim.enable = true;
+
+  # Swap is a last resort against the OOM killer, not somewhere to page to routinely.
+  boot.kernel.sysctl."vm.swappiness" = 10;
+
+  boot.tmp.cleanOnBoot = true;
+
+  # growpart, for taking up space after the zvol is enlarged (see README).
+  environment.systemPackages = [ pkgs.cloud-utils ];
 }

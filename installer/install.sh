@@ -20,7 +20,14 @@ done
 echo "installing $host onto ${disks[*]}"
 
 # If anything fails from here, put the disks back to blank so the next boot retries.
-trap 'echo "installing $host failed; wiping ${disks[*]} so the next boot can retry"; umount -R /mnt || true; lsblk --list --noheadings --paths --output NAME "${disks[@]}" | tac | xargs wipefs --all' ERR
+wipe() {
+  echo "installing $host failed; wiping ${disks[*]} so the next boot can retry"
+  umount -R /mnt || true
+  swapoff --all || true
+  vgchange --activate n || true
+  lsblk --list --noheadings --paths --output NAME "${disks[@]}" | tac | xargs wipefs --all
+}
+trap wipe ERR
 
 "$disko" --yes-wipe-all-disks
 

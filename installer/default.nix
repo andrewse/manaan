@@ -18,6 +18,7 @@ let
     runtimeInputs = [
       pkgs.coreutils
       pkgs.util-linux
+      pkgs.lvm2
       pkgs.openssh
       config.nix.package
       config.system.build.nixos-install
