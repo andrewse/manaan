@@ -44,6 +44,14 @@
         }
       );
 
+      checks.${system} = nixpkgs.lib.genAttrs hosts (
+        name:
+        import ./tests/host.nix {
+          inherit pkgs name;
+          modules = hostModules name;
+        }
+      );
+
       formatter.${system} = pkgs.nixfmt;
     };
 }
