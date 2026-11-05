@@ -7,5 +7,6 @@
     ./tailscale.nix
     ./git-server
     ./smoke-tests
+    ./self-upgrade
   ];
 }
