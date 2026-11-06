@@ -24,8 +24,8 @@ build: ## Build HOST's system
 build-all:
 	@for h in $(HOSTS); do $(MAKE) --no-print-directory build HOST=$$h || exit 1; done
 
-test: ## Boot HOST in VMs: smoke and network tests, and the installer ISO (needs x86_64 Linux with KVM)
-	$(NIX) build -L --no-link .#checks.$(SYSTEM).$(HOST) .#checks.$(SYSTEM).$(HOST)-installer
+test: ## Boot HOST in VMs: smoke and network tests, then install from the ISO and upgrade (needs x86_64 Linux with KVM)
+	$(NIX) build -L --no-link .#checks.$(SYSTEM).$(HOST) .#checks.$(SYSTEM).$(HOST)-lifecycle
 
 test-all:
 	@for h in $(HOSTS); do $(MAKE) --no-print-directory test HOST=$$h || exit 1; done

@@ -1,9 +1,9 @@
 mkdir -p "$state"
 touch "$state/bad-revs"
 
-rev=$(git ls-remote "https://github.com/$repo" "refs/heads/$branch" | cut -f1)
+rev=$(git ls-remote "$url" "refs/heads/$branch" | cut -f1)
 [[ -n $rev ]] || {
-  echo "branch $branch not found in $repo" >&2
+  echo "branch $branch not found in $url" >&2
   exit 1
 }
 
@@ -18,8 +18,7 @@ if grep -qxF "$rev" "$state/bad-revs"; then
 fi
 
 echo "building $rev"
-new=$(nix build --no-link --print-out-paths \
-  "github:$repo/$rev#nixosConfigurations.$host.config.system.build.toplevel")
+new=$(build_system "$rev")
 prev=$(readlink -f /run/current-system)
 
 if [[ $new == "$prev" ]]; then

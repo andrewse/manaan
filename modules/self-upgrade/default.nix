@@ -21,7 +21,7 @@ let
   stateDir = "/var/lib/self-upgrade";
 
   mkScript =
-    name: vars: file:
+    name: vars: text:
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = [
@@ -41,7 +41,7 @@ let
         )
         + "\n"
         + builtins.readFile ./lib.sh
-        + builtins.readFile file;
+        + text;
     };
 in
 {
@@ -51,6 +51,24 @@ in
       type = lib.types.str;
       default = "andrewse/machine_configs";
       description = "GitHub owner/repo to pull from.";
+    };
+    url = lib.mkOption {
+      type = lib.types.str;
+      default = "https://github.com/${cfg.repo}";
+      defaultText = lib.literalExpression ''"https://github.com/''${config.machine.selfUpgrade.repo}"'';
+      description = "Git URL polled for new commits on the branch.";
+    };
+    build = lib.mkOption {
+      type = lib.types.str;
+      internal = true;
+      default = ''
+        nix build --no-link --print-out-paths \
+          "github:${cfg.repo}/$1#nixosConfigurations.${config.networking.hostName}.config.system.build.toplevel"
+      '';
+      description = ''
+        Shell commands that build this host's system at commit $1 and print its store path.
+        The VM test replaces it, as it has no GitHub to build from.
+      '';
     };
     branch = lib.mkOption {
       type = lib.types.str;
@@ -93,10 +111,14 @@ in
       serviceConfig = {
         Type = "oneshot";
         ExecStart = lib.getExe (
-          mkScript "self-upgrade" {
-            inherit (cfg) repo branch;
-            host = config.networking.hostName;
-          } ./upgrade.sh
+          mkScript "self-upgrade" { inherit (cfg) url branch; } (
+            ''
+              build_system() {
+              ${cfg.build}
+              }
+            ''
+            + builtins.readFile ./upgrade.sh
+          )
         );
       };
     };
@@ -119,7 +141,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = lib.getExe (mkScript "self-upgrade-verify" { } ./verify.sh);
+        ExecStart = lib.getExe (mkScript "self-upgrade-verify" { } (builtins.readFile ./verify.sh));
       };
     };
 

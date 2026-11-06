@@ -65,19 +65,20 @@
           inherit pkgs name;
           modules = hostModules name;
         };
-        # Same installer, but the system it installs has the VM test overrides and
-        # the test driver's backdoor so the test can inspect it after it reboots.
-        "${name}-installer" = import ./tests/installer.nix {
-          inherit pkgs name;
-          installer = mkInstaller (
-            mkHost (
-              hostModules name
-              ++ [
-                ./tests/vm.nix
-                "${nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
-              ]
-            )
-          );
+        # Installs the host from its ISO and upgrades it. The systems it installs have
+        # the VM test overrides and the test driver's backdoor, so the test can
+        # inspect them after each reboot.
+        "${name}-lifecycle" = import ./tests/lifecycle.nix {
+          inherit
+            pkgs
+            name
+            mkHost
+            mkInstaller
+            ;
+          modules = hostModules name ++ [
+            ./tests/vm.nix
+            "${nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
+          ];
         };
       });
 
