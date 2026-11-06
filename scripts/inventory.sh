@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Dump what the existing (Ubuntu) manaan runs, so it can be replicated here.
 #
-#   scp scripts/inventory.sh manaan:
-#   ssh -t manaan sudo bash inventory.sh
-#   scp manaan:/tmp/inventory-manaan-*.tar.gz . && mkdir -p inventory && tar -xzf inventory-manaan-*.tar.gz -C inventory
+#   scripts/fetch-inventory.sh manaan    (from this repo; unpacks into inventory/)
+#   sudo bash inventory.sh               (on the machine; writes /tmp/inventory-*.tar.gz)
 #
 # Read-only: it only runs list/show/inspect commands and copies files.
 # Values that look like secrets (passwords, tokens, keys, URL credentials,
