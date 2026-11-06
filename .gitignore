@@ -2,3 +2,5 @@ result
 result-*
 # ISOs from `make iso`
 out/
+# Dumps from scripts/inventory.sh: may hold secrets
+inventory/
