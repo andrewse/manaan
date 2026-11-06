@@ -60,6 +60,9 @@ in
     systemd.services.auto-install = {
       description = "Install ${host} onto a blank disk";
       wantedBy = [ "multi-user.target" ];
+      # disko and nixos-install expect the tools of an interactive installer shell
+      # (disko calls modprobe for LVM, for one); a service's PATH is minimal.
+      path = [ "/run/current-system/sw" ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = lib.getExe script;
