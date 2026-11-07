@@ -2,7 +2,7 @@
 #
 #   self-upgrade.timer   -> self-upgrade.service: fetch the release branch, build it,
 #                           make it a one-shot boot entry (old system stays default), reboot
-#   boot                 -> smoke-test.service -> self-upgrade-verify.service:
+#   boot                 -> healthcheck.service -> self-upgrade-verify.service:
 #                           pass: make the new system the default
 #                           fail, or the new system never came up: roll back, remember
 #                           the commit as bad, and skip it until the branch moves
@@ -92,7 +92,7 @@ in
 
     # Make every failure to boot end in a reboot, which lands on the old system:
     # a stage-1 failure panics instead of opening a shell, a panic reboots, and
-    # stage 2 carries on past failed mounts so the smoke tests can catch it.
+    # stage 2 carries on past failed mounts so the healthchecks can catch it.
     boot.kernelParams = [
       "boot.panic_on_fail"
       "panic=10"
@@ -140,8 +140,8 @@ in
     systemd.services.self-upgrade-verify = {
       description = "Confirm or roll back a pending upgrade";
       wantedBy = [ "multi-user.target" ];
-      wants = [ "smoke-test.service" ];
-      after = [ "smoke-test.service" ];
+      wants = [ "healthcheck.service" ];
+      after = [ "healthcheck.service" ];
       restartIfChanged = false;
       serviceConfig = {
         Type = "oneshot";

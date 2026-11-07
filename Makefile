@@ -37,10 +37,10 @@ build: ## Build HOST's system
 build-all:
 	@for h in $(HOSTS); do $(MAKE) --no-print-directory build HOST=$$h || exit 1; done
 
-test-scripts: ## Run the self-upgrade, installer and smoke test scripts against stubs, one case per behaviour (no VM)
-	$(NIX) build -L --no-link $(foreach s,upgrade verify install smoke-test,.#checks.$(SYSTEM).script-$(s))
+test-scripts: ## Run the self-upgrade, installer and healthcheck scripts against stubs, one case per behaviour (no VM)
+	$(NIX) build -L --no-link $(foreach s,upgrade verify install healthcheck,.#checks.$(SYSTEM).script-$(s))
 
-test: ## Boot HOST in VMs: smoke and network tests, install from the ISO, upgrades (needs x86_64 Linux with KVM)
+test: ## Boot HOST in VMs: health, network and git tests, install from the ISO, upgrades (needs x86_64 Linux with KVM)
 	$(NIX) build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,.#checks.$(SYSTEM).$(t))
 
 test-all:
@@ -49,7 +49,7 @@ test-all:
 test-local: export NIX_CONFIG := $(LOCAL_NIX_CONFIG)
 test-local: ## On a Mac, without Nix: HOST's tests on aarch64 in Docker Desktop (give it 16 GB); CI runs them on x86_64
 	$(DOCKER_NIX) sh -c 'git config --global --add safe.directory /repo && \
-		nix build -L --no-link $(foreach s,upgrade verify install smoke-test,$(LOCAL_CHECKS).script-$(s)) && \
+		nix build -L --no-link $(foreach s,upgrade verify install healthcheck,$(LOCAL_CHECKS).script-$(s)) && \
 		nix build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,$(LOCAL_CHECKS).$(t))'
 
 vm: ## Interactive VM test driver for HOST
@@ -78,8 +78,8 @@ secret: ## Create or edit secrets/NAME.age
 rekey: ## Re-encrypt all secrets after keys change
 	cd secrets && $(AGENIX) -r
 
-status: ## Show HOST's upgrade and smoke test state
-	ssh $(HOST) 'systemctl status --no-pager smoke-test self-upgrade-verify self-upgrade self-upgrade.timer; \
+status: ## Show HOST's upgrade and healthcheck state
+	ssh $(HOST) 'systemctl status --no-pager healthcheck self-upgrade-verify self-upgrade self-upgrade.timer; \
 		echo; echo "deployed: $$(cat /var/lib/self-upgrade/rev 2>/dev/null)"; \
 		echo "pending:  $$(cat /var/lib/self-upgrade/pending 2>/dev/null)"; \
 		echo "bad revs:"; cat /var/lib/self-upgrade/bad-revs 2>/dev/null'

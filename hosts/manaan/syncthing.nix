@@ -58,7 +58,7 @@ in
 
   machine.firewall.internalTCPPorts = [ guiPort ];
 
-  machine.health.services.syncthing = {
+  machine.healthchecks.services.syncthing = {
     url = "http://127.0.0.1:${toString guiPort}/rest/noauth/health";
     conditions = [
       "[STATUS] == 200"

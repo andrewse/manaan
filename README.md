@@ -9,7 +9,7 @@ push to main ─► CI: format, build every host, boot every host in a VM and te
                  ▼
                CI fast-forwards `release`
                  │
-machine ◄─ self-upgrade.timer: build release, boot it once, smoke test,
+machine ◄─ self-upgrade.timer: build release, boot it once, healthcheck,
            keep it or roll back
 ```
 
@@ -20,7 +20,7 @@ machine ◄─ self-upgrade.timer: build release, boot it once, smoke test,
 | `flake.nix`, `flake.lock` | Inputs pinned to exact commits; same commit, same system |
 | `ssh/` | Admin users: one file per user, named after them, with their SSH public keys in `authorized_keys` format (also git server access) |
 | `hosts/<host>/` | Per-machine config, hardware, disk layout, `host_key.pub`, and the host's own services |
-| `modules/` | Shared modules: users, ssh, firewall, tailscale, docker, monitoring, git server, smoke tests, self-upgrade |
+| `modules/` | Shared modules: users, ssh, firewall, tailscale, docker, git server, self-upgrade, and monitoring: healthchecks, Gatus, Prometheus and Grafana |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |
 | `installer/` | Self-installing ISO, one per host |
 | `tests/` | Tests run in CI: the self-upgrade and installer scripts against stubs, and VM tests for every host: the host itself (`<host>`), installing it from the ISO (`<host>-installer`), and upgrades and rollbacks (`<host>-upgrade`) |
@@ -36,9 +36,9 @@ except `make test-local`. `make test`, `make check` and `make iso` need x86_64 L
 | Check | What |
 | --- | --- |
 | `script-upgrade`, `script-verify`, `script-install` | The self-upgrade and installer scripts against stubbed commands, one case per behaviour (seconds, no VM) |
-| `<host>` | The host in a VM next to a client: smoke tests, SSH, git |
+| `<host>` | The host in a VM next to a client: healthchecks, SSH, git |
 | `<host>-installer` | The ISO refuses a used disk, installs onto a blank one, and the host boots from it |
-| `<host>-upgrade` | From an image of the installed host: a good release is kept; one failing its smoke tests, and one that can't boot, are rolled back and not retried |
+| `<host>-upgrade` | From an image of the installed host: a good release is kept; one failing its healthchecks, and one that can't boot, are rolled back and not retried |
 
 CI runs every check on x86_64 with KVM (`make check`), and only a passing run moves
 `release`. On a Mac without Nix, `make test-local` runs the same checks for aarch64 in
@@ -50,14 +50,16 @@ that the x86_64 system the machines run works. Only CI shows that.
 
 ## How a machine stays healthy
 
-Every module declares smoke tests (`machine.smokeTests.checks`): ports that must
+Every module declares healthchecks (`machine.healthchecks.checks`): ports that must
 accept connections, units that must be active, commands that must succeed. They
-run as `smoke-test.service` at every boot and in the CI VM test.
+run as `healthcheck.service` at every boot and in the CI VM test. They live in
+`modules/monitoring/healthchecks/` and always run, whether or not
+`machine.monitoring.enable` (Prometheus and Grafana) is set.
 
-Long-running services also declare a health endpoint (`machine.health.services`).
+Long-running services also declare a health endpoint (`machine.healthchecks.services`).
 systemd keeps such a unit `activating` until its endpoint answers, so the unit's
 state is its health: **activating** is starting, **active** is healthy, **failed**
-is unhealthy (no answer within its `startTimeout`). The smoke tests wait for a
+is unhealthy (no answer within its `startTimeout`). The healthchecks wait for a
 starting unit up to its own allowance (15 minutes for Sonarr, Radarr and
 NZBHydra2, 5 for the rest), fail an unhealthy one at once, and stop waiting after
 the first failure. The upgrade gate only asks for an answer short of a server error,
@@ -67,8 +69,8 @@ so a login page counts; Gatus checks the answer itself.
 that changes the system is built, made a **one-shot** boot entry while the
 running system stays the default, and rebooted into. On that boot:
 
-- smoke tests pass: the new system becomes the default.
-- smoke tests fail: roll back to the previous system and reboot.
+- healthchecks pass: the new system becomes the default.
+- healthchecks fail: roll back to the previous system and reboot.
 - the new system panics or fails in early boot: the kernel reboots
   (`panic=10`, `boot.panic_on_fail`) into the default, which is still the old system.
 
@@ -88,7 +90,7 @@ Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 | Syncthing, with the old host's device identity | `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
 | NZBHydra2, Sonarr, Radarr, SABnzbd | `hosts/manaan/media.nix` | 5076, 8989, 7878, 8080 |
 | endor's NFS and SMB shares under `/mnt/endor` | `hosts/manaan/mounts.nix` | |
-| Gatus, polling every health endpoint each minute | `modules/gatus.nix` | 8090 (status page) |
+| Gatus, polling every health endpoint each minute | `modules/monitoring/gatus.nix` | 8090 (status page) |
 | Grafana, over Prometheus, node_exporter and cAdvisor | `modules/monitoring/` | 3000 (web UI); the rest on localhost |
 
 Web UIs and SSH are reachable from private networks and Tailscale only
@@ -97,7 +99,7 @@ firewall. Docker rotates container logs (json-file, 3 x 10M) and prunes weekly:
 stopped containers, unused networks and images unused for a week; never named
 volumes. The shares are mounted on first access, so the machine boots without endor.
 
-Grafana's dashboard shows CPU, memory, disks and network, whether each smoke-tested
+Grafana's dashboard shows CPU, memory, disks and network, whether each healthchecked
 unit is up, and CPU and memory per systemd service and per Docker container. It is
 provisioned from `modules/monitoring/dashboard.nix`; edits made in the web UI don't
 stick. Log in as `admin` with the password generated on first start
@@ -157,7 +159,7 @@ the old host's Syncthing `key.pem` and `https-key.pem`. `make secret NAME=smb-cr
 takes the `username=`/`password=` lines for endor's SMB shares; until it exists those two
 shares aren't mounted. `make secret NAME=ntfy` (`NTFY_URL=https://ntfy.sh` and
 `NTFY_TOPIC=<topic>` lines) turns on notifications: a unit with a health endpoint, or
-the smoke tests, failing, and Gatus alerts. A reinstall creates a new host key, so enroll again.
+the healthchecks, failing, and Gatus alerts. A reinstall creates a new host key, so enroll again.
 
 ## One-time GitHub setup
 

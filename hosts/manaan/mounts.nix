@@ -1,5 +1,5 @@
 # Shares on endor, the TrueNAS host this VM runs on. Each is mounted on first
-# access rather than at boot, so manaan boots (and passes its smoke tests)
+# access rather than at boot, so manaan boots (and passes its healthchecks)
 # whether or not endor is serving them yet.
 { config, lib, ... }:
 
