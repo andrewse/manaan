@@ -27,9 +27,26 @@ machine ◄─ self-upgrade.timer: build release, boot it once, smoke test,
 
 ## Make targets
 
-Run `make` for the list. Requires [Nix](https://determinate.systems/nix-installer/).
-`make test`, `make check` and `make iso` need x86_64 Linux (the tests also need KVM);
-on a Mac, let CI run them and download the ISO from the workflow run.
+Run `make` for the list. Requires [Nix](https://determinate.systems/nix-installer/),
+except `make test-local`. `make test`, `make check` and `make iso` need x86_64 Linux
+(the VM tests also need KVM); CI runs them, and the ISO can be downloaded from the workflow run.
+
+## Testing
+
+| Check | What |
+| --- | --- |
+| `script-upgrade`, `script-verify`, `script-install` | The self-upgrade and installer scripts against stubbed commands, one case per behaviour (seconds, no VM) |
+| `<host>` | The host in a VM next to a client: smoke tests, SSH, git |
+| `<host>-installer` | The ISO refuses a used disk, installs onto a blank one, and the host boots from it |
+| `<host>-upgrade` | From an image of the installed host: a good release is kept; one failing its smoke tests, and one that can't boot, are rolled back and not retried |
+
+CI runs every check on x86_64 with KVM (`make check`), and only a passing run moves
+`release`. On a Mac without Nix, `make test-local` runs the same checks for aarch64 in
+Docker Desktop (give it 16 GB of memory). An M1 can't nest virtualization, so the VMs are
+emulated: the host test takes about 3 minutes, the installer and upgrade tests 10 to 15
+each, plus building their ISO and disk image when the system has changed. An arm64 pass
+shows the logic and disk layout work, so it is worth having before pushing; it doesn't show
+that the x86_64 system the machines run works. Only CI shows that.
 
 ## How a machine stays healthy
 
