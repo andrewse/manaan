@@ -71,30 +71,22 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
         in
-        forHosts (
-          name:
-          {
-            ${name} = import ./tests/host.nix {
-              inherit pkgs name;
-              modules = hostModules name;
-            };
-          }
-          # Its QEMU command is written for x86_64 only, for now.
-          // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
-            # Installs the host from its ISO and upgrades it. The systems it installs have
-            # the VM test overrides and the test driver's backdoor, so the test can
-            # inspect them after each reboot.
-            "${name}-lifecycle" = import ./tests/lifecycle.nix {
-              inherit pkgs name;
-              mkHost = mkHost system;
-              mkInstaller = mkInstaller system;
-              modules = hostModules name ++ [
-                ./tests/vm.nix
-                "${nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
-              ];
-            };
-          }
-        )
+        forHosts (name: {
+          ${name} = import ./tests/host.nix {
+            inherit pkgs name;
+            modules = hostModules name;
+          };
+          "${name}-installer" = import ./tests/installer.nix {
+            inherit pkgs name;
+            modules = hostModules name;
+            mkInstaller = mkInstaller system;
+          };
+          "${name}-upgrade" = import ./tests/upgrade.nix {
+            inherit pkgs name;
+            modules = hostModules name;
+            mkHost = mkHost system;
+          };
+        })
         // import ./tests/scripts.nix { inherit pkgs; }
       );
 

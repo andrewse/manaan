@@ -23,7 +23,7 @@ machine ◄─ self-upgrade.timer: build release, boot it once, smoke test,
 | `modules/` | Shared modules: users, ssh, tailscale, git server, smoke tests, self-upgrade |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |
 | `installer/` | Self-installing ISO, one per host |
-| `tests/` | VM tests run in CI for every host: the host itself, and its lifecycle (install from the ISO, upgrades, rollbacks) |
+| `tests/` | Tests run in CI: the self-upgrade and installer scripts against stubs, and VM tests for every host: the host itself (`<host>`), installing it from the ISO (`<host>-installer`), and upgrades and rollbacks (`<host>-upgrade`) |
 
 ## Make targets
 
