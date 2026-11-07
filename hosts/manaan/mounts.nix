@@ -17,13 +17,12 @@ let
     options = [ "nfsvers=4.2" ] ++ automount;
   };
 
-  smbCredentials = ../../secrets/smb-credentials.age;
-  useSmbCredentials = config.machine.secrets.enable && builtins.pathExists smbCredentials;
+  secrets = config.machine.secrets.paths;
   cifs = share: {
     device = "//${endor}/${share}";
     fsType = "cifs";
     options = [
-      "credentials=${config.age.secrets.smb-credentials.path}"
+      "credentials=${secrets.smb-credentials}"
       "iocharset=utf8"
       "uid=3000"
       "gid=3000"
@@ -44,10 +43,10 @@ in
     "/mnt/endor/paperless" = nfs "documents/paperless";
   }
   # `username=` and `password=` lines (`make secret NAME=smb-credentials`).
-  // lib.optionalAttrs useSmbCredentials {
+  // lib.optionalAttrs (secrets ? smb-credentials) {
     "/mnt/endor/stuff" = cifs "stuff";
     "/mnt/endor/downloads" = cifs "downloads";
   };
 
-  age.secrets.smb-credentials = lib.mkIf useSmbCredentials { file = smbCredentials; };
+  machine.secrets.use = [ "smb-credentials" ];
 }
