@@ -4,3 +4,6 @@ result-*
 out/
 # Dumps from scripts/inventory.sh: may hold secrets
 inventory/
+
+# The merge queue does its work in worktrees under here.
+.worktrees/
