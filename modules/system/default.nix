@@ -5,5 +5,6 @@
     ./secrets.nix
     ./users.nix
     ./firewall.nix
+    ./notify.nix
   ];
 }

@@ -4,9 +4,8 @@
 # state is the service's health:
 #   activating = starting, active = healthy, failed = unhealthy
 # (it didn't answer within startTimeout). Each becomes a `unit` healthcheck
-# that reads that state, Gatus (../monitoring/gatus.nix) keeps polling the URL while the
-# machine runs, and a unit that fails sends a notification once the ntfy
-# secret exists.
+# that reads that state, Gatus keeps polling the URL while the machine runs,
+# and a unit that fails sends a notification (../system/notify.nix).
 {
   config,
   lib,
@@ -17,8 +16,6 @@
 
 let
   cfg = config.machine.healthchecks;
-  ntfy = config.machine.secrets.paths.ntfy or null;
-  useNtfy = ntfy != null;
 
   # Any answer short of a server error counts: a login page or a 401 still
   # shows the service is up, and a later auth setting mustn't fail an upgrade.
@@ -39,21 +36,6 @@ let
     '';
   };
 
-  notifyFailure = pkgs.writeShellApplication {
-    name = "notify-failure";
-    runtimeInputs = [
-      pkgs.curl
-      config.systemd.package
-    ];
-    text = ''
-      unit=$1
-      systemctl status --no-pager --lines=10 "$unit" |
-        curl --silent --show-error --max-time 10 \
-          --header "Title: ${config.networking.hostName}: $unit failed" \
-          --header "Tags: warning" \
-          --data-binary @- "$NTFY_URL/$NTFY_TOPIC"
-    '';
-  };
 in
 {
   options.machine.healthchecks = {
@@ -81,42 +63,21 @@ in
         }
       );
     };
-    ntfyEnvironmentFile = lib.mkOption {
-      type = with lib.types; nullOr str;
-      readOnly = true;
-      default = ntfy;
-      description = "NTFY_URL and NTFY_TOPIC, once the ntfy secret exists.";
-    };
   };
 
   config = {
-    systemd.services =
-      lib.mapAttrs (_: service: {
-        serviceConfig = {
-          ExecStartPost = [
-            (utils.escapeSystemdExecArgs [
-              (lib.getExe waitHealthy)
-              service.url
-            ])
-          ];
-          TimeoutStartSec = service.startTimeout;
-        };
-        onFailure = lib.optional useNtfy "notify-failure@%n.service";
-      }) cfg.services
-      // {
-        healthcheck.onFailure = lib.optional useNtfy "notify-failure@%n.service";
-        "notify-failure@" = lib.mkIf useNtfy {
-          description = "Notify that %i failed";
-          serviceConfig = {
-            Type = "oneshot";
-            EnvironmentFile = ntfy;
-            ExecStart = "${lib.getExe notifyFailure} %i";
-          };
-        };
+    systemd.services = lib.mapAttrs (_: service: {
+      serviceConfig = {
+        ExecStartPost = [
+          (utils.escapeSystemdExecArgs [
+            (lib.getExe waitHealthy)
+            service.url
+          ])
+        ];
+        TimeoutStartSec = service.startTimeout;
       };
-
-    # `make secret NAME=ntfy`: NTFY_URL=https://ntfy.sh and NTFY_TOPIC=<topic> lines.
-    machine.secrets.use = [ "ntfy" ];
+      inherit (config.machine.notify) onFailure;
+    }) cfg.services;
 
     machine.healthchecks.checks = lib.mapAttrs (name: service: {
       type = "unit";

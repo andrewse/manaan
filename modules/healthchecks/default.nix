@@ -107,6 +107,7 @@ in
       wantedBy = [ "multi-user.target" ];
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
+      inherit (config.machine.notify) onFailure;
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
