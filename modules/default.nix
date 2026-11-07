@@ -1,14 +1,9 @@
 {
   imports = [
-    ./common.nix
-    ./secrets.nix
-    ./users.nix
-    ./firewall.nix
-    ./ssh.nix
-    ./tailscale.nix
-    ./docker.nix
-    ./monitoring
-    ./git-server
+    ./system
+    ./healthchecks
     ./self-upgrade
+    ./services
+    ./monitoring
   ];
 }
