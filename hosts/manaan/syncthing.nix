@@ -1,6 +1,6 @@
-# Syncthing, keeping the device identity of the old Ubuntu manaan so paired
-# devices carry on syncing with it. Folders and devices are managed in the web
-# UI, as before, and live in config.xml in the config dir, not here.
+# Syncthing as it was on the old Ubuntu manaan: the same device identity, so
+# paired devices carry on syncing with it, the same config dir layout, and the
+# same user and group IDs. The rest is in modules/services/syncthing.nix.
 {
   config,
   lib,
@@ -10,7 +10,6 @@
 
 let
   cfg = config.services.syncthing;
-  guiPort = 8384;
 
   # The device certificate and the web UI's HTTPS certificate. The certificates
   # are public; their keys are secrets (`make secret NAME=syncthing-key` and
@@ -20,13 +19,8 @@ let
 in
 {
   services.syncthing = {
-    enable = true;
     # Config and index database together, as in /etc/opt/syncthing on the old host.
     configDir = "/var/lib/syncthing";
-    guiAddress = "0.0.0.0:${toString guiPort}";
-    openDefaultPorts = true;
-    overrideDevices = false;
-    overrideFolders = false;
     cert = lib.mkIf useKeys "${./syncthing/cert.pem}";
     key = lib.mkIf useKeys secrets.syncthing-key;
   };
@@ -54,14 +48,4 @@ in
     isSystemUser = true;
   };
   users.groups.syncthing.gid = lib.mkForce 989;
-
-  machine.firewall.internalTCPPorts = [ guiPort ];
-
-  machine.healthchecks.services.syncthing = {
-    url = "http://127.0.0.1:${toString guiPort}/rest/noauth/health";
-    conditions = [
-      "[STATUS] == 200"
-      "[BODY].status == OK"
-    ];
-  };
 }

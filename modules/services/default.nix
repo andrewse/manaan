@@ -6,6 +6,11 @@
     ./tailscale.nix
     ./docker.nix
     ./git-server
+    ./syncthing.nix
+    ./nzbhydra2.nix
+    ./sonarr.nix
+    ./radarr.nix
+    ./sabnzbd.nix
     ./prometheus.nix
     ./node-exporter.nix
     ./cadvisor.nix

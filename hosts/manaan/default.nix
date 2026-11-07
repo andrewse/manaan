@@ -3,7 +3,6 @@
     ./hardware.nix
     ./mounts.nix
     ./syncthing.nix
-    ./media.nix
   ];
 
   machine.users = import ../../ssh;
@@ -12,6 +11,15 @@
 
   # Each set up in modules/services/.
   virtualisation.docker.enable = true;
+  services.syncthing.enable = true;
+  # Usenet: NZBHydra2 searches indexers, Sonarr (series) and Radarr (movies)
+  # pick releases, SABnzbd downloads them. The libraries are on endor's NFS
+  # shares (/mnt/endor/series, /mnt/endor/movies); its SMB downloads share is
+  # open to all.
+  services.nzbhydra2.enable = true;
+  services.sonarr.enable = true;
+  services.radarr.enable = true;
+  services.sabnzbd.enable = true;
   services.prometheus.enable = true;
   services.prometheus.exporters.node.enable = true;
   services.cadvisor.enable = true;
