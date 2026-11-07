@@ -20,7 +20,7 @@ machine ◄─ self-upgrade.timer: build release, boot it once, smoke test,
 | `flake.nix`, `flake.lock` | Inputs pinned to exact commits; same commit, same system |
 | `ssh/` | Admin users: one file per user, named after them, with their SSH public keys in `authorized_keys` format (also git server access) |
 | `hosts/<host>/` | Per-machine config, hardware, disk layout, `host_key.pub`, and the host's own services |
-| `modules/` | Shared modules: users, ssh, firewall, tailscale, docker, git server, smoke tests, self-upgrade |
+| `modules/` | Shared modules: users, ssh, firewall, tailscale, docker, monitoring, git server, smoke tests, self-upgrade |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |
 | `installer/` | Self-installing ISO, one per host |
 | `tests/` | Tests run in CI: the self-upgrade and installer scripts against stubs, and VM tests for every host: the host itself (`<host>`), installing it from the ISO (`<host>-installer`), and upgrades and rollbacks (`<host>-upgrade`) |
@@ -89,12 +89,20 @@ Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 | NZBHydra2, Sonarr, Radarr, SABnzbd | `hosts/manaan/media.nix` | 5076, 8989, 7878, 8080 |
 | endor's NFS and SMB shares under `/mnt/endor` | `hosts/manaan/mounts.nix` | |
 | Gatus, polling every health endpoint each minute | `modules/gatus.nix` | 8090 (status page) |
+| Grafana, over Prometheus, node_exporter and cAdvisor | `modules/monitoring/` | 3000 (web UI); the rest on localhost |
 
 Web UIs and SSH are reachable from private networks and Tailscale only
 (`machine.firewall.internalTCPPorts`). Ports Docker publishes bypass the host
 firewall. Docker rotates container logs (json-file, 3 x 10M) and prunes weekly:
 stopped containers, unused networks and images unused for a week; never named
 volumes. The shares are mounted on first access, so the machine boots without endor.
+
+Grafana's dashboard shows CPU, memory, disks and network, whether each smoke-tested
+unit is up, and CPU and memory per systemd service and per Docker container. It is
+provisioned from `modules/monitoring/dashboard.nix`; edits made in the web UI don't
+stick. Log in as `admin` with the password generated on first start
+(`sudo cat /var/lib/grafana/admin-password`). Prometheus keeps 90 days or 2GB of
+`/var`, whichever is less.
 
 ## Disk layout
 

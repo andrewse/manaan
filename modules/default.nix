@@ -7,6 +7,7 @@
     ./ssh.nix
     ./tailscale.nix
     ./docker.nix
+    ./monitoring
     ./git-server
     ./smoke-tests
     ./health.nix
