@@ -10,6 +10,7 @@
   machine.gitServer.enable = true;
   machine.selfUpgrade.enable = true;
   machine.docker.enable = true;
+  machine.gatus.enable = true;
 
   # The same ID as on the old host, so files on endor's NFS shares stay charles's.
   users.users.charles.uid = 1000;

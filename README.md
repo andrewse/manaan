@@ -54,6 +54,15 @@ Every module declares smoke tests (`machine.smokeTests.checks`): ports that must
 accept connections, units that must be active, commands that must succeed. They
 run as `smoke-test.service` at every boot and in the CI VM test.
 
+Long-running services also declare a health endpoint (`machine.health.services`).
+systemd keeps such a unit `activating` until its endpoint answers, so the unit's
+state is its health: **activating** is starting, **active** is healthy, **failed**
+is unhealthy (no answer within its `startTimeout`). The smoke tests wait for a
+starting unit up to its own allowance (15 minutes for Sonarr, Radarr and
+NZBHydra2, 5 for the rest), fail an unhealthy one at once, and stop waiting after
+the first failure. The upgrade gate only asks for an answer short of a server error,
+so a login page counts; Gatus checks the answer itself.
+
 `self-upgrade.timer` checks the `release` branch every 30 minutes. A new commit
 that changes the system is built, made a **one-shot** boot entry while the
 running system stays the default, and rebooted into. On that boot:
@@ -79,6 +88,7 @@ Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 | Syncthing, with the old host's device identity | `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
 | NZBHydra2, Sonarr, Radarr, SABnzbd | `hosts/manaan/media.nix` | 5076, 8989, 7878, 8080 |
 | endor's NFS and SMB shares under `/mnt/endor` | `hosts/manaan/mounts.nix` | |
+| Gatus, polling every health endpoint each minute | `modules/gatus.nix` | 8090 (status page) |
 
 Web UIs and SSH are reachable from private networks and Tailscale only
 (`machine.firewall.internalTCPPorts`). Ports Docker publishes bypass the host
@@ -137,7 +147,9 @@ pre-approved key) and `make secret NAME=root-password` (output of
 `mkpasswd -m yescrypt`). `secrets/syncthing-key.age` and `syncthing-https-key.age` hold
 the old host's Syncthing `key.pem` and `https-key.pem`. `make secret NAME=smb-credentials`
 takes the `username=`/`password=` lines for endor's SMB shares; until it exists those two
-shares aren't mounted. A reinstall creates a new host key, so enroll again.
+shares aren't mounted. `make secret NAME=ntfy` (`NTFY_URL=https://ntfy.sh` and
+`NTFY_TOPIC=<topic>` lines) turns on notifications: a unit with a health endpoint, or
+the smoke tests, failing, and Gatus alerts. A reinstall creates a new host key, so enroll again.
 
 ## One-time GitHub setup
 

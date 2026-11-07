@@ -9,6 +9,8 @@
     ./docker.nix
     ./git-server
     ./smoke-tests
+    ./health.nix
+    ./gatus.nix
     ./self-upgrade
   ];
 }

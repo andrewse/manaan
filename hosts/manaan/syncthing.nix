@@ -58,14 +58,11 @@ in
 
   machine.firewall.internalTCPPorts = [ guiPort ];
 
-  machine.smokeTests.checks = {
-    syncthing = {
-      type = "unit";
-      target = "syncthing.service";
-    };
-    syncthing-gui = {
-      type = "tcp";
-      target = "127.0.0.1:${toString guiPort}";
-    };
+  machine.health.services.syncthing = {
+    url = "http://127.0.0.1:${toString guiPort}/rest/noauth/health";
+    conditions = [
+      "[STATUS] == 200"
+      "[BODY].status == OK"
+    ];
   };
 }
