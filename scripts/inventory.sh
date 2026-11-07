@@ -5,14 +5,16 @@
 #   sudo bash inventory.sh               (on the machine; writes /tmp/inventory-*.tar.gz)
 #
 # Read-only: it only runs list/show/inspect commands and copies files.
-# Values that look like secrets (passwords, tokens, keys, URL credentials,
-# private key blocks) are replaced with <REDACTED> in copied files and docker
-# output. That is a best effort: read the dump before committing any of it,
-# because this repo is public. Pass --no-redact to keep everything.
+# Nothing is redacted by default: the dump holds whatever passwords, tokens and
+# keys the copied files and docker output contain, so never commit it (this
+# repo is public; inventory/ is gitignored). Pass --redact to replace values
+# that look like secrets (passwords, tokens, keys, URL credentials, private key
+# blocks) with <REDACTED> in copied files and docker output. That is a best
+# effort: read the dump before committing any of it.
 set -uo pipefail
 
-redact=1
-[[ ${1:-} == --no-redact ]] && redact=0
+redact=0
+[[ ${1:-} == --redact ]] && redact=1
 max_size=$((512 * 1024)) # skip copying files bigger than this
 
 [[ $EUID -eq 0 ]] || {
@@ -300,4 +302,8 @@ tar -czf "$out.tar.gz" "$(basename "$out")"
 chmod 600 "$out.tar.gz"
 echo
 echo "done: $out.tar.gz ($(du -h "$out.tar.gz" | cut -f1))"
-echo "it may still hold secrets: check it before committing anything from it"
+if ((redact)); then
+  echo "it may still hold secrets: check it before committing anything from it"
+else
+  echo "it holds secrets unredacted: do not commit anything from it"
+fi
