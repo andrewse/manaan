@@ -28,8 +28,9 @@ check: fmt-check build-all test-scripts test-all ## Everything CI runs before re
 fmt: ## Format all nix files
 	$(NIX) fmt -- $$(git ls-files '*.nix')
 
-fmt-check:
+fmt-check: ## Check formatting, and that no nix file is over 300 lines
 	$(NIX) fmt -- --check $$(git ls-files '*.nix')
+	@git ls-files '*.nix' | xargs wc -l | awk '$$2 != "total" && $$1 > 300 { print $$2 " is " $$1 " lines; split it to 300 or fewer"; long = 1 } END { exit long }'
 
 build: ## Build HOST's system
 	$(NIX) build -L --no-link .#nixosConfigurations.$(HOST).config.system.build.toplevel

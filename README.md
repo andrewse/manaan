@@ -20,10 +20,35 @@ machine ◄─ self-upgrade.timer: build release, boot it once, healthcheck,
 | `flake.nix`, `flake.lock` | Inputs pinned to exact commits; same commit, same system |
 | `ssh/` | Admin users: one file per user, named after them, with their SSH public keys in `authorized_keys` format (also git server access) |
 | `hosts/<host>/` | Per-machine config, hardware, disk layout, `host_key.pub`, and the host's own services |
-| `modules/` | Shared modules: users, ssh, firewall, tailscale, docker, git server, self-upgrade, and monitoring: healthchecks, Gatus, Prometheus and Grafana |
+| `modules/system/` | The OS itself, on every host: common settings, users, secrets, the firewall, notifications |
+| `modules/healthchecks/` | The checks that gate every upgrade, declared by each module |
+| `modules/self-upgrade/` | Pulling `release`, booting it once, keeping it or rolling back |
+| `modules/services/` | One file (or directory) per app or service, each set up once the host switches it on |
+| `lib/` | Functions the modules share, such as `mkScript` for their shell scripts |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |
 | `installer/` | Self-installing ISO, one per host |
-| `tests/` | Tests run in CI: the self-upgrade and installer scripts against stubs, and VM tests for every host: the host itself (`<host>`), installing it from the ISO (`<host>-installer`), and upgrades and rollbacks (`<host>-upgrade`) |
+| `tests/` | Tests run in CI: the harness for the script tests (each script's tests are beside it, as `<name>.test.sh`), and VM tests for every host: the host itself (`<host>`), installing it from the ISO (`<host>-installer`), and upgrades and rollbacks (`<host>-upgrade`) |
+
+### Adding a service
+
+A service any host could run gets its own file, `modules/services/<name>.nix`
+(listed in `modules/services/default.nix`), or a directory once it has a
+script or a second file. It does nothing until the host switches it on with
+the service's own NixOS option, such as `services.sonarr.enable = true;` in
+`hosts/<host>/default.nix`; only services NixOS lacks get a
+`machine.<name>.enable` of their own (`machine.gitServer`). The file then
+declares, under `lib.mkIf cfg.enable`:
+
+- its ports, in `machine.firewall.internalTCPPorts` (private networks and Tailscale only);
+- its health: `machine.healthchecks.services.<unit>.url` for a long-running
+  service with a health endpoint, `machine.healthchecks.checks` for anything else;
+- its secrets, by name in `machine.secrets.use`, read from `machine.secrets.paths`.
+
+A shell script goes beside its module as `<name>.sh`, built with
+`machineLib.mkScript`, with its tests beside it as `<name>.test.sh` (listed in
+`tests/scripts.nix`). Something only one host runs goes in `hosts/<host>/`
+until a second host needs it. No Nix file is over 300 lines: `make fmt-check`
+fails on one that is.
 
 ## Make targets
 
@@ -35,7 +60,7 @@ except `make test-local`. `make test`, `make check` and `make iso` need x86_64 L
 
 | Check | What |
 | --- | --- |
-| `script-upgrade`, `script-verify`, `script-install` | The self-upgrade and installer scripts against stubbed commands, one case per behaviour (seconds, no VM) |
+| `script-upgrade`, `script-verify`, `script-install`, `script-healthcheck` | The self-upgrade, installer and healthcheck scripts against stubbed commands, one case per behaviour (seconds, no VM) |
 | `<host>` | The host in a VM next to a client: healthchecks, SSH, git |
 | `<host>-installer` | The ISO refuses a used disk, installs onto a blank one, and the host boots from it |
 | `<host>-upgrade` | From an image of the installed host: a good release is kept; one failing its healthchecks, and one that can't boot, are rolled back and not retried |
@@ -53,8 +78,7 @@ that the x86_64 system the machines run works. Only CI shows that.
 Every module declares healthchecks (`machine.healthchecks.checks`): ports that must
 accept connections, units that must be active, commands that must succeed. They
 run as `healthcheck.service` at every boot and in the CI VM test. They live in
-`modules/monitoring/healthchecks/` and always run, whether or not
-`machine.monitoring.enable` (Prometheus and Grafana) is set.
+`modules/healthchecks/` and always run, whatever monitoring the host has.
 
 Long-running services also declare a health endpoint (`machine.healthchecks.services`).
 systemd keeps such a unit `activating` until its endpoint answers, so the unit's
@@ -85,13 +109,13 @@ Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 
 | Service | Where | Port |
 | --- | --- | --- |
-| SSH, git server | `modules/ssh.nix`, `modules/git-server/` | 22 |
-| Docker, for compose projects run by hand | `modules/docker.nix` | whatever they publish |
-| Syncthing, with the old host's device identity | `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
-| NZBHydra2, Sonarr, Radarr, SABnzbd | `hosts/manaan/media.nix` | 5076, 8989, 7878, 8080 |
+| SSH, git server | `modules/services/ssh.nix`, `modules/services/git-server/` | 22 |
+| Docker, for compose projects run by hand | `modules/services/docker.nix` | whatever they publish |
+| Syncthing, with the old host's device identity | `modules/services/syncthing.nix`, `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
+| NZBHydra2, Sonarr, Radarr, SABnzbd | `modules/services/{nzbhydra2,sonarr,radarr,sabnzbd}.nix` | 5076, 8989, 7878, 8080 |
 | endor's NFS and SMB shares under `/mnt/endor` | `hosts/manaan/mounts.nix` | |
-| Gatus, polling every health endpoint each minute | `modules/monitoring/gatus.nix` | 8090 (status page) |
-| Grafana, over Prometheus, node_exporter and cAdvisor | `modules/monitoring/` | 3000 (web UI); the rest on localhost |
+| Gatus, polling every health endpoint each minute | `modules/services/gatus.nix` | 8090 (status page) |
+| Grafana, over Prometheus, node_exporter and cAdvisor | `modules/services/{grafana/,prometheus.nix,node-exporter.nix,cadvisor.nix}` | 3000 (web UI); the rest on localhost |
 
 Web UIs and SSH are reachable from private networks and Tailscale only
 (`machine.firewall.internalTCPPorts`). Ports Docker publishes bypass the host
@@ -101,7 +125,7 @@ volumes. The shares are mounted on first access, so the machine boots without en
 
 Grafana's dashboard shows CPU, memory, disks and network, whether each healthchecked
 unit is up, and CPU and memory per systemd service and per Docker container. It is
-provisioned from `modules/monitoring/dashboard.nix`; edits made in the web UI don't
+provisioned from `modules/services/grafana/dashboard/`; edits made in the web UI don't
 stick. Log in as `admin` with the password generated on first start
 (`sudo cat /var/lib/grafana/admin-password`). Prometheus keeps 90 days or 2GB of
 `/var`, whichever is less.

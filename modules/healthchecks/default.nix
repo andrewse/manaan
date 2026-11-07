@@ -3,7 +3,7 @@
 # They run as healthcheck.service on every boot (gating self-upgrade), as the
 # `healthcheck` command, and inside the VM test in CI. Services with a health
 # endpoint declare it in machine.healthchecks.services (services.nix) instead.
-# Always on, whether or not machine.monitoring.enable is: upgrades depend on them.
+# Always on, whatever monitoring the host runs: upgrades depend on them.
 {
   config,
   lib,
