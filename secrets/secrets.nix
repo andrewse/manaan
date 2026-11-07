@@ -3,7 +3,7 @@
 # public key appears in hosts/<host>/host_key.pub after `make enroll HOST=<host>`;
 # until then the host boots without its secrets.
 let
-  admins = (import ../keys.nix).charles;
+  admins = (import ../ssh).charles;
   hostKey =
     host:
     let

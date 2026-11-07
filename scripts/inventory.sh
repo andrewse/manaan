@@ -47,13 +47,15 @@ scrub() {
 }
 
 # run FILE CMD...: record a command and its output (and errors) in FILE.
+# Gives up after $limit seconds (default 300), killing it if it ignores TERM.
 run() {
   local file=$1
   shift
   mkdir -p "$(dirname "$file")"
+  echo "  \$ $*"
   {
     echo "\$ $*"
-    timeout 300 "$@" 2>&1 </dev/null
+    timeout -k 10 "${limit:-300}" "$@" 2>&1 </dev/null
     local rc=$?
     ((rc == 0)) || echo "(exit $rc)"
   } >>"$file"
@@ -116,15 +118,20 @@ grab /etc/fstab /etc/crypttab /etc/exports /etc/auto.master /etc/auto.master.d
 run storage/lsblk.txt lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,UUID,MOUNTPOINTS,MODEL
 run storage/blkid.txt blkid
 run storage/findmnt.txt findmnt -A
-run storage/df.txt df -hT
+# Local filesystems only: df blocks for good on a dead network mount, and
+# findmnt above already lists those.
+run storage/df.txt df -hTl
 run storage/swap.txt swapon --show
 have pvs && run storage/lvm.txt pvs && run storage/lvm.txt vgs && run storage/lvm.txt lvs -a
 have zpool && run storage/zfs.txt zpool status && run storage/zfs.txt zfs list -o name,used,avail,mountpoint
 [[ -r /proc/mdstat ]] && run storage/mdstat.txt cat /proc/mdstat
-run storage/du-root.txt du -xhd1 /
-run storage/du-var-lib.txt du -xhd1 /var/lib
+# du walks every file, so it is the slow part: walk / once (which covers
+# /var/lib, /srv, /opt...), then only the data dirs that are filesystems of
+# their own (and not network mounts, which can block). du prints each
+# directory as it finishes, so a timeout keeps what it got so far.
+limit=120 run storage/du.txt du -xhd2 /
 for d in /srv /opt /data /mnt /media; do
-  [[ -d $d ]] && run storage/du-other.txt du -xhd2 "$d"
+  findmnt -n --mountpoint "$d" -t nonfs,nfs4,cifs,smb3,fuse.sshfs >/dev/null && limit=120 run storage/du-other.txt du -xhd2 "$d"
 done
 
 echo "- network"
@@ -247,7 +254,7 @@ if have docker; then
   network: {{.HostConfig.NetworkMode}}{{range $k, $v := .NetworkSettings.Networks}} {{$k}}{{end}}
   ports:  {{range $p, $b := .HostConfig.PortBindings}} {{range $b}}{{.HostIp}}:{{.HostPort}}{{end}}->{{$p}}{{end}}
   mounts:{{range .Mounts}}
-    {{.Type}} {{if .Name}}{{.Name}}{{else}}{{.Source}}{{end}} -> {{.Destination}}{{if not .RW}} (ro){{end}}{{end}}
+    {{.Type}} {{if eq .Type "volume"}}{{.Name}}{{else}}{{.Source}}{{end}} -> {{.Destination}}{{if not .RW}} (ro){{end}}{{end}}
 ' "$id" >>docker/summary.txt
   done
   docker volume ls -q | while read -r v; do

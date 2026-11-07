@@ -18,7 +18,7 @@ machine ◄─ self-upgrade.timer: build release, boot it once, smoke test,
 | Path | What |
 | --- | --- |
 | `flake.nix`, `flake.lock` | Inputs pinned to exact commits; same commit, same system |
-| `keys.nix` | Admin users and SSH public keys (also git server access) |
+| `ssh/` | Admin users: one file per user, named after them, with their SSH public keys in `authorized_keys` format (also git server access) |
 | `hosts/<host>/` | Per-machine config, hardware, disk layout, `host_key.pub`, and the host's own services |
 | `modules/` | Shared modules: users, ssh, firewall, tailscale, docker, git server, smoke tests, self-upgrade |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |

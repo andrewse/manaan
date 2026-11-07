@@ -6,7 +6,7 @@
     ./media.nix
   ];
 
-  machine.users = import ../../keys.nix;
+  machine.users = import ../../ssh;
   machine.gitServer.enable = true;
   machine.selfUpgrade.enable = true;
   machine.docker.enable = true;
