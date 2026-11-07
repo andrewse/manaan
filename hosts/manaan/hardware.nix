@@ -13,10 +13,11 @@
   boot.loader.systemd-boot.configurationLimit = 10;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # TrueNAS offers both a display and a serial shell for the VM.
+  # TrueNAS offers both a display and a serial shell for the VM. The serial
+  # port is ttyAMA0 on arm64, where the tests also run.
   boot.kernelParams = [
     "console=tty0"
-    "console=ttyS0,115200"
+    "console=${if pkgs.stdenv.hostPlatform.isAarch64 then "ttyAMA0" else "ttyS0"},115200"
   ];
 
   # Hand deleted blocks back to the zvol, or it only ever grows on the TrueNAS side.

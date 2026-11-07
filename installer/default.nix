@@ -50,7 +50,7 @@ in
     # Same consoles as the installed host: TrueNAS display and serial shell.
     boot.kernelParams = [
       "console=tty0"
-      "console=ttyS0,115200"
+      "console=${if pkgs.stdenv.hostPlatform.isAarch64 then "ttyAMA0" else "ttyS0"},115200"
     ];
     services.getty.helpLine = ''
       This ISO installs ${host} onto a blank disk by itself. Follow along with:

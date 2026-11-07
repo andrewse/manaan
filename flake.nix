@@ -22,8 +22,13 @@
       ...
     }:
     let
+      # What the machines run. The tests also build for aarch64-linux, so they can
+      # run without emulating another architecture on an Apple Silicon Mac.
       system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+      forSystems = nixpkgs.lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
       hosts = builtins.attrNames (
         nixpkgs.lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./hosts)
       );
@@ -37,15 +42,15 @@
         { networking.hostName = name; }
       ];
       mkHost =
-        modules:
+        system: modules:
         nixpkgs.lib.nixosSystem {
           modules = modules ++ [ { nixpkgs.hostPlatform = system; } ];
         };
 
       # An ISO that installs `target` (a nixosSystem) onto a blank disk at boot.
       mkInstaller =
-        target:
-        mkHost [
+        system: target:
+        mkHost system [
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           ./installer
           { machine.installer.target = target; }
@@ -54,34 +59,44 @@
       forHosts = f: nixpkgs.lib.mergeAttrsList (map f hosts);
     in
     {
-      nixosConfigurations = nixpkgs.lib.genAttrs hosts (name: mkHost (hostModules name));
+      nixosConfigurations = nixpkgs.lib.genAttrs hosts (name: mkHost system (hostModules name));
 
       packages.${system} = forHosts (name: {
-        "${name}-installer" = (mkInstaller self.nixosConfigurations.${name}).config.system.build.isoImage;
+        "${name}-installer" =
+          (mkInstaller system self.nixosConfigurations.${name}).config.system.build.isoImage;
       });
 
-      checks.${system} = forHosts (name: {
-        ${name} = import ./tests/host.nix {
-          inherit pkgs name;
-          modules = hostModules name;
-        };
-        # Installs the host from its ISO and upgrades it. The systems it installs have
-        # the VM test overrides and the test driver's backdoor, so the test can
-        # inspect them after each reboot.
-        "${name}-lifecycle" = import ./tests/lifecycle.nix {
-          inherit
-            pkgs
-            name
-            mkHost
-            mkInstaller
-            ;
-          modules = hostModules name ++ [
-            ./tests/vm.nix
-            "${nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
-          ];
-        };
-      });
+      checks = forSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        forHosts (
+          name:
+          {
+            ${name} = import ./tests/host.nix {
+              inherit pkgs name;
+              modules = hostModules name;
+            };
+          }
+          # Its QEMU command is written for x86_64 only, for now.
+          // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+            # Installs the host from its ISO and upgrades it. The systems it installs have
+            # the VM test overrides and the test driver's backdoor, so the test can
+            # inspect them after each reboot.
+            "${name}-lifecycle" = import ./tests/lifecycle.nix {
+              inherit pkgs name;
+              mkHost = mkHost system;
+              mkInstaller = mkInstaller system;
+              modules = hostModules name ++ [
+                ./tests/vm.nix
+                "${nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
+              ];
+            };
+          }
+        )
+      );
 
-      formatter.${system} = pkgs.nixfmt;
+      formatter = forSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
     };
 }
