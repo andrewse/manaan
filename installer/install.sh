@@ -40,6 +40,12 @@ nixos-install --system "$system" --no-root-passwd --no-channel-copy --option sub
 
 trap - ERR
 echo "host key: $(ssh-keygen -l -f /mnt/etc/ssh/ssh_host_ed25519_key.pub)"
+# The VM's network cards, for a DHCP reservation on the router.
+for iface in /sys/class/net/*; do
+  if [[ -e $iface/device ]]; then
+    echo "mac: ${iface##*/} $(<"$iface/address")"
+  fi
+done
 echo "installed $host, rebooting"
 umount -R /mnt
 systemctl reboot

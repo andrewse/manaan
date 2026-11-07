@@ -19,8 +19,8 @@ machine ◄─ self-upgrade.timer: build release, boot it once, smoke test,
 | --- | --- |
 | `flake.nix`, `flake.lock` | Inputs pinned to exact commits; same commit, same system |
 | `keys.nix` | Admin users and SSH public keys (also git server access) |
-| `hosts/<host>/` | Per-machine config, hardware, disk layout, `host_key.pub` |
-| `modules/` | Shared modules: users, ssh, tailscale, git server, smoke tests, self-upgrade |
+| `hosts/<host>/` | Per-machine config, hardware, disk layout, `host_key.pub`, and the host's own services |
+| `modules/` | Shared modules: users, ssh, firewall, tailscale, docker, git server, smoke tests, self-upgrade |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |
 | `installer/` | Self-installing ISO, one per host |
 | `tests/` | Tests run in CI: the self-upgrade and installer scripts against stubs, and VM tests for every host: the host itself (`<host>`), installing it from the ISO (`<host>-installer`), and upgrades and rollbacks (`<host>-upgrade`) |
@@ -70,6 +70,22 @@ further, so a failure unrelated to an upgrade won't cause a reboot loop.
 
 Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 
+## What manaan runs
+
+| Service | Where | Port |
+| --- | --- | --- |
+| SSH, git server | `modules/ssh.nix`, `modules/git-server/` | 22 |
+| Docker, for compose projects run by hand | `modules/docker.nix` | whatever they publish |
+| Syncthing, with the old host's device identity | `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
+| NZBHydra2, Sonarr, Radarr, SABnzbd | `hosts/manaan/media.nix` | 5076, 8989, 7878, 8080 |
+| endor's NFS and SMB shares under `/mnt/endor` | `hosts/manaan/mounts.nix` | |
+
+Web UIs and SSH are reachable from private networks and Tailscale only
+(`machine.firewall.internalTCPPorts`). Ports Docker publishes bypass the host
+firewall. Docker rotates container logs (json-file, 3 x 10M) and prunes weekly:
+stopped containers, unused networks and images unused for a week; never named
+volumes. The shares are mounted on first access, so the machine boots without endor.
+
 ## Disk layout
 
 `hosts/<host>/disko.nix`, written by the installer. Each mount is a separate LVM
@@ -83,9 +99,10 @@ volume, so a full `/var` or `/tmp` can't take `/` or `/nix` down with it:
 | `/var` | 10G | `nodev` |
 | `/home` | 8G | `nodev,nosuid` |
 | `/tmp` | 4G, cleared at boot | `nodev,nosuid` |
+| `/var/lib/docker` | 100G | |
 | swap | 2G, `swappiness=10` | last resort against the OOM killer |
 
-Sized for a 64G zvol, leaving ~12G of the pool unallocated. To grow a volume
+Sized for a 160G zvol, leaving ~9G of the pool unallocated. To grow a volume
 on the running machine: `sudo lvextend -r -L +5G pool/var`. To grow the pool,
 enlarge the zvol in TrueNAS, then `sudo growpart /dev/vda 2 && sudo pvresize /dev/vda2`.
 
@@ -102,20 +119,25 @@ installing needs no network. When it boots:
 
 For a TrueNAS VM:
 
-1. Create the VM with UEFI boot, a VirtIO NIC, the zvol (at least 64G) as a VirtIO disk with
+1. Create the VM with UEFI boot, a VirtIO NIC, the zvol (at least 160G) as a VirtIO disk with
    boot order 1001, and the ISO as a CD-ROM with boot order 1002. The ISO can stay
    attached: once installed, the disk boots first. If the zvol is ever wiped,
    the next boot reinstalls.
 2. Start it and watch the console (Display or Serial Shell). It reboots into
-   the installed system and prints a `host key:` line on the way.
+   the installed system and prints a `host key:` line on the way, and a `mac:` line
+   per network card. manaan uses DHCP: reserve its address on the router for that MAC.
+   The MAC is also under the VM's NIC device in TrueNAS, so the reservation can be made first.
 3. `make enroll HOST=manaan ADDR=<vm ip>` fetches the host key, shows its
    fingerprint to compare with the console, and re-encrypts secrets for it. Commit
-   and push; the machine picks up its secrets (Tailscale, root password) on the
-   next upgrade. Until then it is reachable only over SSH on the LAN.
+   and push; the machine picks up its secrets (Tailscale, root password, the
+   Syncthing keys, the SMB login) on the next upgrade. Until then it is reachable only over SSH on the LAN.
 
 Secrets are created with `make secret NAME=tailscale-authkey` (a reusable,
 pre-approved key) and `make secret NAME=root-password` (output of
-`mkpasswd -m yescrypt`). A reinstall creates a new host key, so enroll again.
+`mkpasswd -m yescrypt`). `secrets/syncthing-key.age` and `syncthing-https-key.age` hold
+the old host's Syncthing `key.pem` and `https-key.pem`. `make secret NAME=smb-credentials`
+takes the `username=`/`password=` lines for endor's SMB shares; until it exists those two
+shares aren't mounted. A reinstall creates a new host key, so enroll again.
 
 ## One-time GitHub setup
 

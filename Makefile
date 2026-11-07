@@ -64,7 +64,7 @@ lock: ## Update flake.lock
 
 enroll: ## After HOST's first boot: trust its host key and re-encrypt secrets for it (ADDR=<ip>)
 	@test -n "$(ADDR)" || { echo "usage: make enroll HOST=manaan ADDR=<ip>"; exit 1; }
-	ssh-keyscan -p 2222 -t ed25519 $(ADDR) 2>/dev/null | cut -d' ' -f2- > hosts/$(HOST)/host_key.pub
+	ssh-keyscan -t ed25519 $(ADDR) 2>/dev/null | cut -d' ' -f2- > hosts/$(HOST)/host_key.pub
 	@test -s hosts/$(HOST)/host_key.pub || { echo "no host key from $(ADDR)"; rm -f hosts/$(HOST)/host_key.pub; exit 1; }
 	@echo "Check this matches the 'host key:' line the installer printed on the console:"
 	@ssh-keygen -l -f hosts/$(HOST)/host_key.pub
@@ -79,7 +79,7 @@ rekey: ## Re-encrypt all secrets after keys change
 	cd secrets && $(AGENIX) -r
 
 status: ## Show HOST's upgrade and smoke test state
-	ssh -p 2222 $(HOST) 'systemctl status --no-pager smoke-test self-upgrade-verify self-upgrade self-upgrade.timer; \
+	ssh $(HOST) 'systemctl status --no-pager smoke-test self-upgrade-verify self-upgrade self-upgrade.timer; \
 		echo; echo "deployed: $$(cat /var/lib/self-upgrade/rev 2>/dev/null)"; \
 		echo "pending:  $$(cat /var/lib/self-upgrade/pending 2>/dev/null)"; \
 		echo "bad revs:"; cat /var/lib/self-upgrade/bad-revs 2>/dev/null'

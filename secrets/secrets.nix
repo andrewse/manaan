@@ -3,7 +3,7 @@
 # public key appears in hosts/<host>/host_key.pub after `make enroll HOST=<host>`;
 # until then the host boots without its secrets.
 let
-  admins = (import ../keys.nix).asemple;
+  admins = (import ../keys.nix).charles;
   hostKey =
     host:
     let
@@ -18,4 +18,7 @@ in
 {
   "tailscale-authkey.age" = forHosts [ "manaan" ];
   "root-password.age" = forHosts [ "manaan" ];
+  "smb-credentials.age" = forHosts [ "manaan" ];
+  "syncthing-key.age" = forHosts [ "manaan" ];
+  "syncthing-https-key.age" = forHosts [ "manaan" ];
 }

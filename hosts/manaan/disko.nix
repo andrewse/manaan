@@ -1,6 +1,6 @@
 # Partitioning for the zvol, written by the installer ISO. Each mount is its own
-# LVM volume so one filling up can't fill the others. Sized for a 64G zvol: about
-# 12G of the pool is left unallocated on purpose, to grow whichever volume needs
+# LVM volume so one filling up can't fill the others. Sized for a 160G zvol: about
+# 9G of the pool is left unallocated on purpose, to grow whichever volume needs
 # it while mounted, e.g. `lvextend -r -L +5G pool/var`. ext4 rather than a
 # copy-on-write filesystem: the zvol is already CoW and is snapshotted by TrueNAS.
 let
@@ -62,6 +62,11 @@ in
             "nodev"
             "nosuid"
           ];
+        };
+        # Images, containers and named volumes, so they can't fill /var.
+        docker = {
+          size = "100G";
+          content = ext4 "/var/lib/docker" [ ];
         };
         tmp = {
           size = "4G";
