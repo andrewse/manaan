@@ -10,14 +10,11 @@
 }:
 
 let
-  cfg = config.machine.docker;
+  cfg = config.virtualisation.docker;
 in
 {
-  options.machine.docker.enable = lib.mkEnableOption "Docker";
-
   config = lib.mkIf cfg.enable {
     virtualisation.docker = {
-      enable = true;
       # Container logs stay with the container, rotated, rather than in the journal.
       logDriver = "json-file";
       daemon.settings.log-opts = {
@@ -42,7 +39,7 @@ in
 
     machine.healthchecks.checks.docker = {
       type = "command";
-      target = "${lib.getExe config.virtualisation.docker.package} info";
+      target = "${lib.getExe cfg.package} info";
     };
   };
 }

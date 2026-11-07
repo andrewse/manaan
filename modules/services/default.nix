@@ -6,5 +6,10 @@
     ./tailscale.nix
     ./docker.nix
     ./git-server
+    ./prometheus.nix
+    ./node-exporter.nix
+    ./cadvisor.nix
+    ./grafana
+    ./gatus.nix
   ];
 }

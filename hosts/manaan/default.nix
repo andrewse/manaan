@@ -9,9 +9,14 @@
   machine.users = import ../../ssh;
   machine.gitServer.enable = true;
   machine.selfUpgrade.enable = true;
-  machine.docker.enable = true;
-  machine.gatus.enable = true;
-  machine.monitoring.enable = true;
+
+  # Each set up in modules/services/.
+  virtualisation.docker.enable = true;
+  services.prometheus.enable = true;
+  services.prometheus.exporters.node.enable = true;
+  services.cadvisor.enable = true;
+  services.grafana.enable = true;
+  services.gatus.enable = true;
 
   # The same ID as on the old host, so files on endor's NFS shares stay charles's.
   users.users.charles.uid = 1000;

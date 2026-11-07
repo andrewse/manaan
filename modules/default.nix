@@ -4,6 +4,5 @@
     ./healthchecks
     ./self-upgrade
     ./services
-    ./monitoring
   ];
 }
