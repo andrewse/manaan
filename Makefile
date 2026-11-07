@@ -5,12 +5,12 @@ NIX    := nix --extra-experimental-features 'nix-command flakes'
 AGENIX := $(NIX) run github:ryantm/agenix --
 
 .DEFAULT_GOAL := help
-.PHONY: help check fmt fmt-check build build-all test test-all vm iso lock enroll secret rekey status
+.PHONY: help check fmt fmt-check build build-all test-scripts test test-all vm iso lock enroll secret rekey status
 
 help: ## List targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
 
-check: fmt-check build-all test-all ## Everything CI runs before releasing
+check: fmt-check build-all test-scripts test-all ## Everything CI runs before releasing
 
 fmt: ## Format all nix files
 	$(NIX) fmt -- $$(git ls-files '*.nix')
@@ -23,6 +23,9 @@ build: ## Build HOST's system
 
 build-all:
 	@for h in $(HOSTS); do $(MAKE) --no-print-directory build HOST=$$h || exit 1; done
+
+test-scripts: ## Run the self-upgrade and installer scripts against stubs, one case per behaviour (no VM)
+	$(NIX) build -L --no-link $(foreach s,upgrade verify install,.#checks.$(SYSTEM).script-$(s))
 
 test: ## Boot HOST in VMs: smoke and network tests, then install from the ISO and upgrade (needs x86_64 Linux with KVM)
 	$(NIX) build -L --no-link .#checks.$(SYSTEM).$(HOST) .#checks.$(SYSTEM).$(HOST)-lifecycle

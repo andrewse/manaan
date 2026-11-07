@@ -19,7 +19,7 @@ fi
 
 echo "building $rev"
 new=$(build_system "$rev")
-prev=$(readlink -f /run/current-system)
+prev=$(readlink -f "$current_system")
 
 if [[ $new == "$prev" ]]; then
   echo "$rev" >"$state/rev"

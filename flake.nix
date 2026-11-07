@@ -95,6 +95,7 @@
             };
           }
         )
+        // import ./tests/scripts.nix { inherit pkgs; }
       );
 
       formatter = forSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);

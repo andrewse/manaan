@@ -111,14 +111,19 @@ in
       serviceConfig = {
         Type = "oneshot";
         ExecStart = lib.getExe (
-          mkScript "self-upgrade" { inherit (cfg) url branch; } (
-            ''
-              build_system() {
-              ${cfg.build}
-              }
-            ''
-            + builtins.readFile ./upgrade.sh
-          )
+          mkScript "self-upgrade"
+            {
+              inherit (cfg) url branch;
+              current_system = "/run/current-system";
+            }
+            (
+              ''
+                build_system() {
+                ${cfg.build}
+                }
+              ''
+              + builtins.readFile ./upgrade.sh
+            )
         );
       };
     };
@@ -141,7 +146,11 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = lib.getExe (mkScript "self-upgrade-verify" { } (builtins.readFile ./verify.sh));
+        ExecStart = lib.getExe (
+          mkScript "self-upgrade-verify" {
+            booted_system = "/run/booted-system";
+          } (builtins.readFile ./verify.sh)
+        );
       };
     };
 

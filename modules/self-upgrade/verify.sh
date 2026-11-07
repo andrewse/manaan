@@ -11,7 +11,7 @@ if [[ ! -f $state/pending ]]; then
 fi
 
 read -r rev new prev <"$state/pending"
-booted=$(readlink -f /run/booted-system)
+booted=$(readlink -f "$booted_system")
 
 if [[ $booted == "$new" ]] && ((healthy)); then
   bootctl set-default ""

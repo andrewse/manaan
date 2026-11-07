@@ -27,6 +27,7 @@ let
     text =
       lib.toShellVars {
         inherit host;
+        efi = "/sys/firmware/efi";
         system = target.system.build.toplevel;
         disko = target.system.build.diskoScript;
         disks = lib.catAttrs "device" (lib.attrValues target.disko.devices.disk);

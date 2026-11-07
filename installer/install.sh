@@ -1,13 +1,13 @@
-# Prepended with host, system, disko and disks by default.nix.
+# Prepended with host, efi, system, disko and disks by default.nix.
 
-if [[ ! -d /sys/firmware/efi ]]; then
+if [[ ! -d $efi ]]; then
   echo "not booted with UEFI; set the VM to UEFI boot. Not installing $host."
   exit 1
 fi
 
 udevadm settle
 for disk in "${disks[@]}"; do
-  if [[ ! -b $disk ]]; then
+  if ! lsblk --nodeps "$disk" >/dev/null 2>&1; then
     echo "$disk does not exist. Not installing $host."
     exit 1
   fi
