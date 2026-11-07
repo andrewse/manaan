@@ -4,8 +4,21 @@ SYSTEM := x86_64-linux
 NIX    := nix --extra-experimental-features 'nix-command flakes'
 AGENIX := $(NIX) run github:ryantm/agenix --
 
+# test-local: Nix in an arm64 container, its store kept in a volume between runs.
+# Docker Desktop on an M1 can't nest virtualization, so the test VMs are emulated;
+# kvm is claimed only to get the test driver to run them.
+define LOCAL_NIX_CONFIG
+experimental-features = nix-command flakes
+sandbox = false
+filter-syscalls = false
+system-features = nixos-test benchmark big-parallel kvm
+endef
+DOCKER_NIX := docker run --rm --platform linux/arm64 -v "$(CURDIR)":/repo:ro \
+	-v machine-configs-nix:/nix -e NIX_CONFIG nixos/nix:latest
+LOCAL_CHECKS = git+file:///repo\#checks.aarch64-linux
+
 .DEFAULT_GOAL := help
-.PHONY: help check fmt fmt-check build build-all test-scripts test test-all vm iso lock enroll secret rekey status
+.PHONY: help check fmt fmt-check build build-all test-scripts test test-all test-local vm iso lock enroll secret rekey status
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
@@ -32,6 +45,12 @@ test: ## Boot HOST in VMs: smoke and network tests, then install from the ISO an
 
 test-all:
 	@for h in $(HOSTS); do $(MAKE) --no-print-directory test HOST=$$h || exit 1; done
+
+test-local: export NIX_CONFIG := $(LOCAL_NIX_CONFIG)
+test-local: ## On a Mac, without Nix: HOST's tests on aarch64 in Docker Desktop (give it 16 GB); CI runs them on x86_64
+	$(DOCKER_NIX) sh -c 'git config --global --add safe.directory /repo && \
+		nix build -L --no-link $(foreach s,upgrade verify install,$(LOCAL_CHECKS).script-$(s)) && \
+		nix build -L --no-link $(LOCAL_CHECKS).$(HOST)'
 
 vm: ## Interactive VM test driver for HOST
 	$(NIX) run .#checks.$(SYSTEM).$(HOST).driverInteractive
