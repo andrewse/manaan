@@ -33,10 +33,17 @@
         nixpkgs.lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./hosts)
       );
 
+      machineLib =
+        { pkgs, ... }:
+        {
+          _module.args.machineLib = import ./lib { inherit pkgs; };
+        };
+
       # Shared by the real machine and its VM test, so the test boots the same config.
       hostModules = name: [
         disko.nixosModules.disko
         agenix.nixosModules.default
+        machineLib
         ./modules
         ./hosts/${name}
         { networking.hostName = name; }
@@ -52,6 +59,7 @@
         system: target:
         mkHost system [
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+          machineLib
           ./installer
           { machine.installer.target = target; }
         ];

@@ -13,6 +13,7 @@
   config,
   lib,
   pkgs,
+  machineLib,
   ...
 }:
 
@@ -20,9 +21,10 @@ let
   cfg = config.machine.selfUpgrade;
   stateDir = "/var/lib/self-upgrade";
 
+  # Each script starts with lib.sh, after the shared variables and its own.
   mkScript =
-    name: vars: text:
-    pkgs.writeShellApplication {
+    name: vars: parts:
+    machineLib.mkScript {
       inherit name;
       runtimeInputs = [
         pkgs.coreutils
@@ -31,17 +33,12 @@ let
         config.nix.package
         config.systemd.package
       ];
-      text =
-        lib.toShellVars (
-          {
-            state = stateDir;
-            profile = "/nix/var/nix/profiles/system";
-          }
-          // vars
-        )
-        + "\n"
-        + builtins.readFile ./lib.sh
-        + text;
+      vars = {
+        state = stateDir;
+        profile = "/nix/var/nix/profiles/system";
+      }
+      // vars;
+      parts = [ ./lib.sh ] ++ parts;
     };
 in
 {
@@ -116,14 +113,14 @@ in
               inherit (cfg) url branch;
               current_system = "/run/current-system";
             }
-            (
+            [
               ''
                 build_system() {
                 ${cfg.build}
                 }
               ''
-              + builtins.readFile ./upgrade.sh
-            )
+              ./upgrade.sh
+            ]
         );
       };
     };
@@ -149,7 +146,7 @@ in
         ExecStart = lib.getExe (
           mkScript "self-upgrade-verify" {
             booted_system = "/run/booted-system";
-          } (builtins.readFile ./verify.sh)
+          } [ ./verify.sh ]
         );
       };
     };

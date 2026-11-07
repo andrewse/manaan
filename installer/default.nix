@@ -6,6 +6,7 @@
   config,
   lib,
   pkgs,
+  machineLib,
   ...
 }:
 
@@ -13,7 +14,7 @@ let
   target = config.machine.installer.target.config;
   host = target.networking.hostName;
 
-  script = pkgs.writeShellApplication {
+  script = machineLib.mkScript {
     name = "auto-install";
     runtimeInputs = [
       pkgs.coreutils
@@ -24,16 +25,14 @@ let
       config.system.build.nixos-install
       config.systemd.package
     ];
-    text =
-      lib.toShellVars {
-        inherit host;
-        efi = "/sys/firmware/efi";
-        system = target.system.build.toplevel;
-        disko = target.system.build.diskoScript;
-        disks = lib.catAttrs "device" (lib.attrValues target.disko.devices.disk);
-      }
-      + "\n"
-      + builtins.readFile ./install.sh;
+    vars = {
+      inherit host;
+      efi = "/sys/firmware/efi";
+      system = target.system.build.toplevel;
+      disko = target.system.build.diskoScript;
+      disks = lib.catAttrs "device" (lib.attrValues target.disko.devices.disk);
+    };
+    parts = [ ./install.sh ];
   };
 in
 {
