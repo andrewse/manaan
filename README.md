@@ -4,11 +4,13 @@ NixOS configurations for my machines. Each machine pulls this repo and upgrades
 itself; nothing is pushed to machines.
 
 ```
-push to main ─► CI: format, build every host, boot every host in a VM and test it
+push to main ─► CI, `make release`: format, build every host, boot every host in a VM
+                 │                   and test it
                  │ pass
                  ▼
-               CI fast-forwards `release`
-                 │
+               CI fast-forwards `release` ◄─ every Monday, CI, `make update`: update flake.lock;
+                 │                           if an input moved and it passes the same checks,
+                 │                           push it to main and release it
 machine ◄─ self-upgrade.timer: build release, boot it once, healthcheck,
            keep it or roll back
 ```
@@ -55,6 +57,12 @@ fails on one that is.
 Run `make` for the list. Requires [Nix](https://determinate.systems/nix-installer/),
 except `make test-local`. `make test`, `make check` and `make iso` need x86_64 Linux
 (the VM tests also need KVM); CI runs them, and the ISO can be downloaded from the workflow run.
+
+CI runs the same targets as a checkout does, and nothing else: `make release` on every
+push to main, then `make isos`; `make update` every Monday. Each takes what it needs from
+where it runs: origin and its credentials, the git identity (`GIT_AUTHOR_*` in CI), and
+whatever `make check` can run there, so on a Mac `make update` commits the new lock and
+stops at `check`, before pushing anything.
 
 ## Testing
 
@@ -153,7 +161,7 @@ enlarge the zvol in TrueNAS, then `sudo growpart /dev/vda 2 && sudo pvresize /de
 ## Setting up a new machine
 
 Each host has an installer ISO (`make iso`, or the `installer-isos` artifact
-from the latest `check` run on main). It contains the whole system, so
+from the latest `release` run on main). It contains the whole system, so
 installing needs no network. When it boots:
 
 - every disk in the host's `disko.nix` is blank (no partitions, no signatures):
@@ -187,7 +195,6 @@ the healthchecks, failing, and Gatus alerts. A reinstall creates a new host key,
 
 ## One-time GitHub setup
 
-- Protect `main` (require the `check` job) and `release` (only GitHub Actions may push).
+- Protect `release` (only GitHub Actions may push). `main` must let GitHub Actions push,
+  since the weekly update pushes to it.
 - Settings → Actions → General → Workflow permissions: read and write.
-- Optional: a `FLAKE_LOCK_TOKEN` secret (fine-grained PAT: contents + pull requests)
-  so the weekly flake.lock PR triggers CI.

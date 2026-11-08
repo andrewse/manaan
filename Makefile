@@ -18,12 +18,27 @@ DOCKER_NIX := docker run --rm --platform linux/arm64 -v "$(CURDIR)":/repo:ro \
 LOCAL_CHECKS = git+file:///repo\#checks.aarch64-linux
 
 .DEFAULT_GOAL := help
-.PHONY: help check fmt fmt-check build build-all test-scripts test test-all test-local vm iso lock enroll secret rekey status
+.PHONY: help check release update fmt fmt-check build build-all test-scripts test test-all test-local vm iso isos lock enroll secret rekey status
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
 
 check: fmt-check build-all test-scripts test-all ## Everything CI runs before releasing
+
+# Machines deploy origin's release branch, so it only moves to a commit that is on
+# main and passes check. A plain push only fast-forwards, so a late run can't move it back.
+release: check ## Fast-forward origin's release to HEAD, once HEAD is on origin's main
+	git fetch --quiet origin main
+	@git merge-base --is-ancestor HEAD FETCH_HEAD || { echo "HEAD is not on origin's main; push it there first"; exit 1; }
+	git push origin HEAD:refs/heads/release
+
+update: ## Update flake.lock; if an input moved and check passes, push it to origin's main and release it
+	@before=$$(git rev-parse HEAD); \
+	$(NIX) flake update --commit-lock-file --option commit-lock-file-summary 'flake: update inputs' || exit 1; \
+	if [ "$$(git rev-parse HEAD)" = "$$before" ]; then echo "flake.lock is up to date"; exit 0; fi; \
+	$(MAKE) --no-print-directory check && \
+	git push origin HEAD:refs/heads/main && \
+	$(MAKE) --no-print-directory release
 
 fmt: ## Format all nix files
 	$(NIX) fmt -- $$(git ls-files '*.nix')
@@ -59,6 +74,9 @@ vm: ## Interactive VM test driver for HOST
 iso: ## Build HOST's self-installing ISO into out/
 	mkdir -p out
 	install -m644 "$$($(NIX) build -L --no-link --print-out-paths .#$(HOST)-installer)"/iso/*.iso out/
+
+isos: ## Build every host's self-installing ISO into out/
+	@for h in $(HOSTS); do $(MAKE) --no-print-directory iso HOST=$$h || exit 1; done
 
 lock: ## Update flake.lock
 	$(NIX) flake update
