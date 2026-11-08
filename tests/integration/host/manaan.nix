@@ -82,4 +82,14 @@ in
     );
     expected = [ ];
   };
+
+  "syncthing makes its own keys rather than being handed the old host's" = {
+    expr = {
+      inherit (config.services.syncthing) cert key;
+    };
+    expected = {
+      cert = null;
+      key = null;
+    };
+  };
 }

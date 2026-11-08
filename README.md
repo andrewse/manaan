@@ -162,7 +162,7 @@ Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 | --- | --- | --- |
 | SSH, git server, its repos on endor at `/mnt/endor/repos` | `modules/services/ssh.nix`, `modules/services/git-server/` | 22 |
 | Docker, for compose projects run by hand | `modules/services/docker.nix` | whatever they publish |
-| Syncthing, with the old host's device identity | `modules/services/syncthing.nix`, `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
+| Syncthing, with a device identity of its own | `modules/services/syncthing.nix`, `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
 | NZBHydra2, Sonarr, Radarr, SABnzbd | `modules/services/{nzbhydra2,sonarr,radarr,sabnzbd}.nix` | 5076, 8989, 7878, 8080 |
 | endor's NFS and SMB shares under `/mnt/endor` | `hosts/manaan/mounts.nix` | |
 | Gatus, polling every health endpoint each minute | `modules/services/gatus.nix` | 8090 (status page) |
@@ -237,12 +237,12 @@ For a TrueNAS VM:
 3. `make enroll HOST=manaan ADDR=<vm ip>` fetches the host key, shows its
    fingerprint to compare with the console, and re-encrypts secrets for it. Commit
    and push; the machine picks up its secrets (Tailscale, root password, the
-   Syncthing keys, the SMB login) on the next upgrade. Until then it is reachable only over SSH on the LAN.
+   SMB login) on the next upgrade. Until then it is reachable only over SSH on the LAN.
 
 Secrets are created with `make secret NAME=tailscale-authkey` (a reusable,
 pre-approved key; until it exists, Tailscale isn't logged in or healthchecked) and `make secret NAME=root-password` (output of
-`mkpasswd -m yescrypt`). `secrets/syncthing-key.age` and `syncthing-https-key.age` hold
-the old host's Syncthing `key.pem` and `https-key.pem`. `make secret NAME=smb-credentials`
+`mkpasswd -m yescrypt`). Syncthing has no secret: it makes its own keys on first start,
+and a reinstall gives it a new device ID to pair with. `make secret NAME=smb-credentials`
 takes the `username=`/`password=` lines for endor's SMB shares; until it exists those two
 shares aren't mounted. `make secret NAME=ntfy` (`NTFY_URL=https://ntfy.sh` and
 `NTFY_TOPIC=<topic>` lines) turns on notifications: a unit with a health endpoint, or

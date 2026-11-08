@@ -19,7 +19,5 @@ in
   "tailscale-authkey.age" = forHosts [ "manaan" ];
   "root-password.age" = forHosts [ "manaan" ];
   "smb-credentials.age" = forHosts [ "manaan" ];
-  "syncthing-key.age" = forHosts [ "manaan" ];
-  "syncthing-https-key.age" = forHosts [ "manaan" ];
   "ntfy.age" = forHosts [ "manaan" ];
 }
