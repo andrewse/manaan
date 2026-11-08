@@ -175,6 +175,14 @@ test command, its linter, its build — and say plainly in the commit if
 something fails and you are leaving it failing. For a change to the queue
 itself, that is `make queue-selftest`.
 
+**Not the VM tests.** `make test`, `test-all`, `test-local` and `check` boot the
+`<host>`, `<host>-installer` and `<host>-upgrade` tests in VMs, which on this
+Mac means the best part of an hour per host, emulated in Docker. They run once,
+in the merge queue, on the tree an entry will land as, and only if the entry
+could affect them — see **The VM tests** in `.claude/skills/merge-queue/SKILL.md`.
+Running them here as well costs that hour on a tree that is not the one that
+lands.
+
 ## 4. The merge message, written last
 
 The branch lands as **one commit**, squashed, and this is its message — the

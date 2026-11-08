@@ -13,9 +13,14 @@ sandbox = false
 filter-syscalls = false
 system-features = nixos-test benchmark big-parallel kvm
 endef
-DOCKER_NIX := docker run --rm --platform linux/arm64 -v "$(CURDIR)":/repo:ro \
+# Mounted at their own paths, not /repo: in a worktree (the merge queue runs these
+# in one) .git points into the main checkout's .git by absolute path, and that
+# records the worktree's path in turn.
+GIT_COMMON := $(shell git rev-parse --path-format=absolute --git-common-dir)
+DOCKER_NIX := docker run --rm --platform linux/arm64 -v "$(CURDIR)":"$(CURDIR)":ro \
+	-v "$(GIT_COMMON)":"$(GIT_COMMON)":ro \
 	-v machine-configs-nix:/nix -e NIX_CONFIG nixos/nix:latest
-LOCAL_CHECKS = git+file:///repo\#checks.aarch64-linux
+LOCAL_CHECKS = git+file://$(CURDIR)\#checks.aarch64-linux
 
 .DEFAULT_GOAL := help
 .PHONY: help check release update fmt fmt-check build build-all test-scripts test test-all test-local vm iso isos lock enroll secret rekey status
@@ -64,7 +69,7 @@ test-all:
 
 test-local: export NIX_CONFIG := $(LOCAL_NIX_CONFIG)
 test-local: ## On a Mac, without Nix: HOST's tests on aarch64 in Docker Desktop (give it 16 GB); CI runs them on x86_64
-	$(DOCKER_NIX) sh -c 'git config --global --add safe.directory /repo && \
+	$(DOCKER_NIX) sh -c 'git config --global --add safe.directory "*" && \
 		nix build -L --no-link $(foreach s,upgrade verify install healthcheck,$(LOCAL_CHECKS).script-$(s)) && \
 		nix build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,$(LOCAL_CHECKS).$(t))'
 

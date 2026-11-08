@@ -186,6 +186,9 @@ and then the range as a whole against the merge message. Run the checks the
 part of the repository you are reviewing actually has — its test command, its
 linter, its build — **before** you change anything, so you know what the entry
 arrived with. For a change to the queue itself, that is `make queue-selftest`.
+Not the VM tests (`make test`, `test-all`, `test-local`, `check`): they are too
+expensive to run more than once, so the merge queue runs them, before landing,
+on an entry that could affect them.
 
 A failure that was already there is a finding about the entry. A failure you
 introduce while fixing something is yours, and step 4 does not finish until it
