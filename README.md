@@ -144,8 +144,8 @@ Grafana's dashboard shows CPU, memory, disks and network, whether each healthche
 unit is up, and CPU and memory per systemd service and per Docker container. It is
 provisioned from `modules/services/grafana/dashboard/`; edits made in the web UI don't
 stick. Log in as `admin` with the password generated on first start
-(`sudo cat /var/lib/grafana/admin-password`). Prometheus keeps 90 days or 2GB of
-`/var`, whichever is less.
+(`sudo cat /var/lib/grafana/admin-password`). Prometheus keeps 90 days or 2GB,
+whichever is less, on a volume of its own.
 
 ## Disk layout
 
@@ -161,9 +161,11 @@ volume, so a full `/var` or `/tmp` can't take `/` or `/nix` down with it:
 | `/home` | 8G | `nodev,nosuid` |
 | `/tmp` | 4G, cleared at boot | `nodev,nosuid` |
 | `/var/lib/docker` | 100G | |
+| `/var/lib/grafana` | 1G | `nodev,nosuid` |
+| `/var/lib/prometheus2` | 3G: 2GB of retention, plus room to compact | `nodev,nosuid` |
 | swap | 2G, `swappiness=10` | last resort against the OOM killer |
 
-Sized for a 160G zvol, leaving ~9G of the pool unallocated. To grow a volume
+Sized for a 160G zvol, leaving ~5G of the pool unallocated. To grow a volume
 on the running machine: `sudo lvextend -r -L +5G pool/var`. To grow the pool,
 enlarge the zvol in TrueNAS, then `sudo growpart /dev/vda 2 && sudo pvresize /dev/vda2`.
 

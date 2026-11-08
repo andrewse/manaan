@@ -1,6 +1,6 @@
 # Partitioning for the zvol, written by the installer ISO. Each mount is its own
 # LVM volume so one filling up can't fill the others. Sized for a 160G zvol: about
-# 9G of the pool is left unallocated on purpose, to grow whichever volume needs
+# 5G of the pool is left unallocated on purpose, to grow whichever volume needs
 # it while mounted, e.g. `lvextend -r -L +5G pool/var`. ext4 rather than a
 # copy-on-write filesystem: the zvol is already CoW and is snapshotted by TrueNAS.
 let
@@ -67,6 +67,24 @@ in
         docker = {
           size = "100G";
           content = ext4 "/var/lib/docker" [ ];
+        };
+        # Grafana's database: users, sessions, annotations. Tens of MB; the
+        # dashboards are provisioned from the store.
+        grafana = {
+          size = "1G";
+          content = ext4 "/var/lib/grafana" [
+            "nodev"
+            "nosuid"
+          ];
+        };
+        # Prometheus's TSDB, capped at 2GB by its retention; the rest is room
+        # for compaction, which writes a new block before deleting the old ones.
+        prometheus = {
+          size = "3G";
+          content = ext4 "/var/lib/prometheus2" [
+            "nodev"
+            "nosuid"
+          ];
         };
         tmp = {
           size = "4G";

@@ -32,7 +32,7 @@ in
     services.prometheus = {
       listenAddress = "127.0.0.1";
       port = 9090;
-      # /var is 10G and shared; whichever limit comes first.
+      # On manaan its data has a 3G volume of its own; whichever limit comes first.
       retentionTime = "90d";
       extraFlags = [ "--storage.tsdb.retention.size=2GB" ];
       globalConfig.scrape_interval = "15s";
