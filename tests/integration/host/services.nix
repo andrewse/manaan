@@ -7,6 +7,11 @@ let
   health = config.machine.healthchecks;
   hasUnit = unit: config.systemd.units ? ${unit};
   unitChecks = lib.filterAttrs (_: check: check.enable && check.type == "unit") health.checks;
+  # Gatus can only poll a check that connects or fetches; a check is already
+  # off when what it checks doesn't start at boot.
+  pollableChecks = lib.filterAttrs (
+    _: check: check.enable && (check.type == "tcp" || check.type == "http")
+  ) health.checks;
   prometheus = config.services.prometheus;
   grafana = config.services.grafana;
   # A unit a host says not to start at boot is neither watched nor scraped.
@@ -52,11 +57,18 @@ in
   };
 }
 // lib.optionalAttrs config.services.gatus.enable {
-  "Gatus watches every other service with a health URL that starts at boot" = {
+  "Gatus watches each other service and each tcp or http check that starts at boot" = {
     expr = lib.sort lib.lessThan (map (e: e.name) config.services.gatus.settings.endpoints);
     expected = lib.sort lib.lessThan (
       lib.filter (unit: unit != "gatus" && starts unit) (lib.attrNames health.services)
+      ++ lib.attrNames pollableChecks
     );
+  };
+
+  # Gatus refuses to start with none.
+  "Gatus has at least one endpoint" = {
+    expr = config.services.gatus.settings.endpoints != [ ];
+    expected = true;
   };
 }
 // lib.optionalAttrs prometheus.enable {
