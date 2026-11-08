@@ -93,6 +93,7 @@
             inherit pkgs name;
             modules = hostModules name;
             mkHost = mkHost system;
+            mkInstaller = mkInstaller system;
           };
         })
         // import ./tests/scripts.nix { inherit pkgs; }

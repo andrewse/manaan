@@ -75,7 +75,7 @@ stops at `check`, before pushing anything.
 | `script-upgrade`, `script-verify`, `script-install`, `script-healthcheck` | The self-upgrade, installer and healthcheck scripts against stubbed commands, one case per behaviour (seconds, no VM) |
 | `<host>` | The host in a VM next to a client: healthchecks, SSH, git |
 | `<host>-installer` | The ISO refuses a used disk, installs onto a blank one, and the host boots from it |
-| `<host>-upgrade` | From an image of the installed host: a good release is kept; one failing its healthchecks, and one that can't boot, are rolled back and not retried |
+| `<host>-upgrade` | From an image of the installed host, its ISO still attached: a good release is kept; one failing its healthchecks, and one that can't boot, are rolled back and not retried |
 
 CI runs every check on x86_64 with KVM (`make check`), and only a passing run moves
 `release`. On a Mac without Nix, `make test-local` runs the same checks for aarch64 in
