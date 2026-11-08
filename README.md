@@ -30,6 +30,8 @@ machine ◄─ self-upgrade.timer: build release, boot it once, healthcheck,
 | `lib/` | Functions the modules share, such as `mkScript` for their shell scripts |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |
 | `installer/` | Self-installing ISO, one per host |
+| `scripts/` | Dumping what the old Ubuntu manaan ran, to replicate it here (`fetch-inventory.sh`) |
+| `queue/` | The merge queue every change lands through (`make queue-help`) |
 | `tests/` | The harnesses for the unit tests (each script's and module's are beside it, as `<name>.test.sh` and `<name>.test.nix`), the integration tests (`integration/`), and the system tests, VMs for every host (`system/`) |
 
 ### Adding a service
@@ -96,7 +98,7 @@ by prefix; the system tests are a pytest suite that boots what the flake builds:
 | --- | --- | --- |
 | `make test-unit` | checks `unit-*` | One script or module on its own, one case per behaviour: a script against stubbed commands (`<name>.test.sh` beside it), a module evaluated with no other module of this repo's (`<name>.test.nix` beside it). Seconds |
 | `make test-integration` | checks `integration-*` | Several together, still with nothing outside the build: self-upgrade across reboots against a fake firmware (`rollback`), git through the wrapper (`git-server`), and each host's whole config as it ships (`<host>`), and again with every service switched off and with every one on (`<host>-all-services-off`, `-on`). Seconds |
-| `make test-system` | `tests/system/test_*.py` | The host in a VM, tested from outside: installed from its ISO onto a blank disk (`test_installer`); SSH, git, its web services, the sandbox and healthchecks (`test_host`); upgraded, keeping a good release and rolling back one that fails its healthchecks or can't boot (`test_upgrade`) |
+| `make test-system` | `tests/system/test_*.py` | The host in a VM, tested from outside: installed from its ISO onto a blank disk (`test_installer`); SSH, git, Grafana and Prometheus, the sandbox, autostart, the service commands and healthchecks (`test_host`); upgraded, keeping a good release and rolling back one that fails its healthchecks or can't boot (`test_upgrade`) |
 
 Unit and integration tests are what a change is checked with: every worktree runs them,
 and the merge queue runs them on each entry before it lands. The system tests are few and
@@ -114,7 +116,7 @@ the config. `make system-image` builds it into `out/system/<host>/image`; the in
 cached beside it until it changes, and every test starts from a copy-on-write overlay of
 it. Endor's shares are local directories there (`machine.localShares`).
 
-Needs: QEMU (`brew install qemu`; on Ubuntu `qemu-system-x86 qemu-utils ovmf`), whose own
+Needs: QEMU (`brew install qemu`; on Ubuntu `qemu-system-x86 qemu-utils ovmf python3-venv`), whose own
 UEFI firmware it boots with, and Python 3 for the venv `make test-system` creates. CI runs
 everything on x86_64 under KVM (`make check`), and only a passing run moves `release`. On a
 Mac without Nix, Docker Desktop builds the image for aarch64 (Nix in an arm64 container, its
@@ -161,8 +163,9 @@ Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 | Service | Where | Port |
 | --- | --- | --- |
 | SSH, git server, its repos on endor at `/mnt/endor/repos` | `modules/services/ssh.nix`, `modules/services/git-server/` | 22 |
+| Tailscale, on every host | `modules/services/tailscale.nix` | 41641/udp |
 | Docker, for compose projects run by hand | `modules/services/docker.nix` | whatever they publish |
-| Syncthing, with a device identity of its own | `modules/services/syncthing.nix`, `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
+| Syncthing, with a device identity of its own | `modules/services/syncthing.nix`, `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000 (TCP and UDP), 21027/udp |
 | NZBHydra2, Sonarr, Radarr, SABnzbd | `modules/services/{nzbhydra2,sonarr,radarr,sabnzbd}.nix` | 5076, 8989, 7878, 8080 |
 | endor's NFS and SMB shares under `/mnt/endor` | `hosts/manaan/mounts.nix` | |
 | Gatus, polling every health endpoint each minute | `modules/services/gatus.nix` | 8090 (status page) |
@@ -171,8 +174,8 @@ Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 Web UIs and SSH are reachable from private networks and Tailscale only
 (`machine.firewall.internalTCPPorts`). Ports Docker publishes bypass the host
 firewall. Docker rotates container logs (json-file, 3 x 10M) and prunes weekly:
-stopped containers, unused networks and images unused for a week; never named
-volumes. The shares are mounted on first access, so the machine boots without endor.
+stopped containers, unused networks, the build cache and images unused for a week;
+never named volumes. The shares are mounted on first access, so the machine boots without endor.
 
 Grafana's dashboard shows CPU, memory, disks and network, whether each healthchecked
 unit is up, and CPU and memory per systemd service and per Docker container. It is
@@ -240,7 +243,7 @@ For a TrueNAS VM:
    SMB login) on the next upgrade. Until then it is reachable only over SSH on the LAN.
 
 Secrets are created with `make secret NAME=tailscale-authkey` (a reusable,
-pre-approved key; until it exists, Tailscale isn't logged in or healthchecked) and `make secret NAME=root-password` (output of
+pre-approved key; until it exists, Tailscale isn't logged in, and its login isn't healthchecked) and `make secret NAME=root-password` (output of
 `mkpasswd -m yescrypt`). Syncthing has no secret: it makes its own keys on first start,
 and a reinstall gives it a new device ID to pair with. `make secret NAME=smb-credentials`
 takes the `username=`/`password=` lines for endor's SMB shares; until it exists those two
