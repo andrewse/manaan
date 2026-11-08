@@ -106,6 +106,25 @@ in
     expected = true;
   };
 }
+// lib.optionalAttrs config.services.sonarr.enable {
+  # Sonarr would make it on its first start, but systemd won't start a unit
+  # whose writable paths are missing.
+  "Sonarr's data dir is made before it starts, since its sandbox needs it to exist" = {
+    expr =
+      let
+        dir = config.services.sonarr.dataDir;
+      in
+      lib.concatMap (file: lib.optional (file ? ${dir}.d) { inherit (file.${dir}.d) user group mode; }) (
+        lib.attrValues config.systemd.tmpfiles.settings
+      );
+    expected = [
+      {
+        inherit (config.services.sonarr) user group;
+        mode = "0700";
+      }
+    ];
+  };
+}
 // lib.optionalAttrs prometheus.enable {
   "the metrics are reachable only on the machine itself" = {
     expr = {

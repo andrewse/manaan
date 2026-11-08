@@ -17,6 +17,13 @@ in
     machine.firewall.internalTCPPorts = [ port ];
     # Its libraries and downloads are the host's to add.
     machine.sandbox.sonarr.writes = [ cfg.dataDir ];
+    # systemd won't start a unit whose ReadWritePaths= is missing, and nixpkgs
+    # leaves Sonarr to make its data dir on its first start: make it first, as
+    # nixpkgs does for Radarr's.
+    systemd.tmpfiles.settings."10-sonarr".${cfg.dataDir}.d = {
+      inherit (cfg) user group;
+      mode = "0700";
+    };
 
     # Its own health endpoint, which needs no API key. It migrates its database
     # on the first start after an upgrade: give it longer to come up.
