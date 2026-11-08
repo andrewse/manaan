@@ -30,6 +30,10 @@ in
     machine.firewall.internalTCPPorts = [ port ];
     # Its downloads are the host's to add.
     machine.sandbox.sabnzbd.writes = [ "/var/lib/${cfg.stateDir}" ];
+    # The sandbox leaves /tmp read-only, and nixpkgs' preStart builds the
+    # merged sabnzbd.ini in a file from a bare mktemp, so it gets a /tmp of
+    # its own to write.
+    systemd.services.sabnzbd.serviceConfig.PrivateTmp = true;
 
     # Its own health endpoint, which needs no API key.
     machine.healthchecks.services.sabnzbd.url =

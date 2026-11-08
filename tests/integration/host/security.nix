@@ -132,6 +132,12 @@ in
     };
   };
 }
+// lib.optionalAttrs config.services.sabnzbd.enable {
+  "SABnzbd gets a /tmp of its own, as the sandbox leaves the host's read-only" = {
+    expr = services.sabnzbd.serviceConfig.PrivateTmp or false;
+    expected = true;
+  };
+}
 // lib.optionalAttrs grafana.enable {
   "Grafana is reachable from private networks only" = {
     expr = opened grafana.settings.server.http_port;
