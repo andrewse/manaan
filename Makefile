@@ -26,7 +26,7 @@ LOCAL_CHECKS = git+file://$(CURDIR)\#checks.aarch64-linux
 .PHONY: help check release update fmt fmt-check build build-all test-scripts test test-all test-local vm iso isos lock enroll secret rekey status
 
 help: ## List targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
+	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
 
 check: fmt-check build-all test-scripts test-all ## Everything CI runs before releasing
 
@@ -107,3 +107,6 @@ status: ## Show HOST's upgrade and healthcheck state
 		echo; echo "deployed: $$(cat /var/lib/self-upgrade/rev 2>/dev/null)"; \
 		echo "pending:  $$(cat /var/lib/self-upgrade/pending 2>/dev/null)"; \
 		echo "bad revs:"; cat /var/lib/self-upgrade/bad-revs 2>/dev/null'
+
+# The merge queue's queue-* targets; `make queue-help` lists them.
+include queue/queue.mk
