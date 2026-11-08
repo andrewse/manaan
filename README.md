@@ -196,7 +196,7 @@ from the latest `release` run on main). It contains the whole system, so
 installing needs no network. When it boots:
 
 - every disk in the host's `disko.nix` is blank (no partitions, no signatures):
-  format, install, print the new SSH host key fingerprint, reboot into the disk.
+  print the new SSH host key fingerprint, format, install, reboot into the disk.
 - any disk is not blank: do nothing. The ISO never overwrites a disk.
 - the install fails part way: wipe the disk back to blank so the next boot retries.
 
@@ -206,9 +206,19 @@ For a TrueNAS VM:
    boot order 1001, and the ISO as a CD-ROM with boot order 1002. The ISO can stay
    attached: once installed, the disk boots first. If the zvol is ever wiped,
    the next boot reinstalls.
-2. Start it and watch the console (Display or Serial Shell). It reboots into
-   the installed system and prints a `host key:` line on the way, and a `mac:` line
-   per network card. manaan uses DHCP: reserve its address on the router for that MAC.
+2. Start it and watch the console (Display or Serial Shell). It prints a `host key:`
+   line before installing, then a `mac:` line per network card, and reboots into
+   the installed system. To follow the install's progress over SSH instead, log in
+   as one of the host's admins, by key:
+
+   ```bash
+   ssh charles@<vm ip> journalctl -fu auto-install
+   ```
+
+   It shows what the console does: formatting, nixos-install copying the system,
+   then `installed manaan, rebooting`, when the connection drops. The ISO serves
+   the host's own key, so ssh sees the same host key after the reboot.
+   manaan uses DHCP: reserve its address on the router for that MAC.
    The MAC is also under the VM's NIC device in TrueNAS, so the reservation can be made first.
 3. `make enroll HOST=manaan ADDR=<vm ip>` fetches the host key, shows its
    fingerprint to compare with the console, and re-encrypts secrets for it. Commit

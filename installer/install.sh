@@ -1,4 +1,4 @@
-# Prepended with host, efi, system, disko and disks by default.nix.
+# Prepended with host, hostKey, efi, system, disko and disks by default.nix.
 
 if [[ ! -d $efi ]]; then
   echo "not booted with UEFI; set the VM to UEFI boot. Not installing $host."
@@ -17,7 +17,16 @@ for disk in "${disks[@]}"; do
   fi
 done
 
+# The ISO's sshd already serves the key the host will have, so it can be checked
+# against `make enroll` now, and SSH sees no change after the reboot. Without
+# it, stop before touching the disks.
+if ! fingerprint=$(ssh-keygen -l -f "$hostKey.pub"); then
+  echo "no SSH host key at $hostKey. Not installing $host."
+  exit 1
+fi
+
 echo "installing $host onto ${disks[*]}"
+echo "host key: $fingerprint"
 
 # If anything fails from here, put the disks back to blank so the next boot retries.
 wipe() {
@@ -31,15 +40,13 @@ trap wipe ERR
 
 "$disko" --yes-wipe-all-disks
 
-# Generated here rather than on first boot so the fingerprint can be shown now
-# and checked against `make enroll`.
 install -d -m755 /mnt/etc/ssh
-ssh-keygen -q -t ed25519 -N "" -C "root@$host" -f /mnt/etc/ssh/ssh_host_ed25519_key
+install -m600 "$hostKey" /mnt/etc/ssh/ssh_host_ed25519_key
+install -m644 "$hostKey.pub" /mnt/etc/ssh/ssh_host_ed25519_key.pub
 
 nixos-install --system "$system" --no-root-passwd --no-channel-copy --option substituters ""
 
 trap - ERR
-echo "host key: $(ssh-keygen -l -f /mnt/etc/ssh/ssh_host_ed25519_key.pub)"
 # The VM's network cards, for a DHCP reservation on the router.
 for iface in /sys/class/net/*; do
   if [[ -e $iface/device ]]; then
