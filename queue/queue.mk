@@ -110,6 +110,13 @@ QUEUE     := $(QUEUE_DIR)queue.sh
 QUEUE_MAIN ?= main
 export QUEUE_MAIN
 
+# What `queue-drain` and `queue-merge` run on each entry's squashed tree before
+# the target branch moves to it, from the root of that tree -- the
+# repository's fast tests, say. An entry it fails stays pending. Set it in the
+# including Makefile, before the include, as for QUEUE_MAIN; empty runs nothing.
+QUEUE_TEST ?=
+export QUEUE_TEST
+
 ## queue-help                       every queue target, and how to pass arguments
 queue-help:
 	@printf 'The merge queue. Run these from the repository or worktree root.\n\n'

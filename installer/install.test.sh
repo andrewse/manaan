@@ -2,7 +2,7 @@
 # What the installer ISO does with a disk that is already in use, and with a
 # blank one when the install fails.
 
-# On PATH; see tests/scripts.nix.
+# On PATH; see tests/unit.nix.
 source script-harness.sh
 # install.sh, beside this file.
 scripts=$(dirname "$0")

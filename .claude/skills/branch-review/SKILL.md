@@ -185,10 +185,10 @@ Read the new commits as commits — each one's message against what it does —
 and then the range as a whole against the merge message. Run the checks the
 part of the repository you are reviewing actually has — its test command, its
 linter, its build — **before** you change anything, so you know what the entry
-arrived with. For a change to the queue itself, that is `make queue-selftest`.
-Not the VM tests (`make test`, `test-all`, `test-local`, `check`): they are too
-expensive to run more than once, so the merge queue runs them, before landing,
-on an entry that could affect them.
+arrived with. Here that is `make test-unit test-integration`, and for a change
+to the queue itself, `make queue-selftest` too. Not the system tests (`make
+test-system`, `test-system-all`, `check`): they are too expensive to run more
+than once, so the merge queue runs them, once, after a drain.
 
 A failure that was already there is a finding about the entry. A failure you
 introduce while fixing something is yours, and step 4 does not finish until it

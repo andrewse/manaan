@@ -31,6 +31,15 @@ ln -s "$4" "$2-$n-link"
 ln -sfn "${2##*/}-$n-link" "$2"'
 }
 
+# carry_on <description>: starts a case in the last case's root, for a story
+# told across several cases.
+carry_on() {
+  report
+  description=$1
+  case_failed=0
+  output=
+}
+
 # stub <path> <name> [shell commands]: an executable that logs `<name> <args>`,
 # then runs the commands.
 stub() {

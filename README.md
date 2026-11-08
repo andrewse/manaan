@@ -30,7 +30,7 @@ machine ◄─ self-upgrade.timer: build release, boot it once, healthcheck,
 | `lib/` | Functions the modules share, such as `mkScript` for their shell scripts |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |
 | `installer/` | Self-installing ISO, one per host |
-| `tests/` | Tests run in CI: the harness for the script tests (each script's tests are beside it, as `<name>.test.sh`), and VM tests for every host: the host itself (`<host>`), installing it from the ISO (`<host>-installer`), and upgrades and rollbacks (`<host>-upgrade`) |
+| `tests/` | The harnesses for the unit tests (each script's and module's are beside it, as `<name>.test.sh` and `<name>.test.nix`), the integration tests (`integration/`), and the system tests, VMs for every host (`system/`) |
 
 ### Adding a service
 
@@ -68,16 +68,18 @@ service with no unit of its own also adds its name to
 server still answers over SSH, without its healthcheck.
 
 A shell script goes beside its module as `<name>.sh`, built with
-`machineLib.mkScript`, with its tests beside it as `<name>.test.sh` (listed in
-`tests/scripts.nix`). Something only one host runs goes in `hosts/<host>/`
+`machineLib.mkScript`, with its tests beside it as `<name>.test.sh`; a module's
+own tests go beside it as `<name>.test.nix`. Both are listed in
+`tests/unit.nix`. Something only one host runs goes in `hosts/<host>/`
 until a second host needs it. No Nix file is over 300 lines: `make fmt-check`
 fails on one that is.
 
 ## Make targets
 
 Run `make` for the list. Requires [Nix](https://determinate.systems/nix-installer/),
-except `make test-local`. `make test`, `make check` and `make iso` need x86_64 Linux
-(the VM tests also need KVM); CI runs them, and the ISO can be downloaded from the workflow run.
+except the `test-*` targets, which use Docker where there is no Nix. `make check` and
+`make iso` need x86_64 Linux (the system tests also need KVM); CI runs them, and the ISO
+can be downloaded from the workflow run.
 
 CI runs the same targets as a checkout does, and nothing else: `make release` on every
 push to main, then `make isos`; `make update` every Monday. Each takes what it needs from
@@ -87,19 +89,25 @@ stops at `check`, before pushing anything.
 
 ## Testing
 
-| Check | What |
-| --- | --- |
-| `script-upgrade`, `script-verify`, `script-install`, `script-healthcheck`, `script-service-command` | The self-upgrade, installer, healthcheck and service command scripts against stubbed commands, one case per behaviour (seconds, no VM) |
-| `<host>` | The host in a VM next to a client: healthchecks, SSH, git, the service commands |
-| `<host>-installer` | The ISO refuses a used disk, installs onto a blank one, and the host boots from it |
-| `<host>-upgrade` | From an image of the installed host, its ISO still attached: a good release is kept; one failing its healthchecks, and one that can't boot, are rolled back and not retried |
+Three categories, each a make target and a prefix on the flake's checks:
+
+| Target | Checks | What |
+| --- | --- | --- |
+| `make test-unit` | `unit-*` | One script or module on its own, one case per behaviour: a script against stubbed commands (`<name>.test.sh` beside it), a module evaluated with no other module of this repo's (`<name>.test.nix` beside it). Seconds |
+| `make test-integration` | `integration-*` | Several together, still with nothing outside the build: self-upgrade across reboots against a fake firmware (`rollback`), git through the wrapper (`git-server`), and each host's whole config as it ships (`<host>`). Seconds |
+| `make test-system` | `system-<host>`, `-installer`, `-upgrade` | The host in VMs: next to a client (SSH, git, the sandbox, healthchecks); installed from its ISO onto a blank disk; upgraded from an image of it installed, keeping a good release and rolling back one that fails its healthchecks or can't boot |
+
+Unit and integration tests are what a change is checked with: every worktree runs them,
+and the merge queue runs them on each entry before it lands. The system tests are few and
+slow, so the queue runs them once after a drain, if what landed could affect them, and
+marks the commit they passed on as `refs/merge-queue-verified`.
 
 CI runs every check on x86_64 with KVM (`make check`), and only a passing run moves
-`release`. On a Mac without Nix, `make test-local` runs the same checks for aarch64 in
-Docker Desktop (give it 16 GB of memory). An M1 can't nest virtualization, so the VMs are
-emulated: the host test takes about 3 minutes, the installer and upgrade tests 10 to 15
-each, plus building their ISO and disk image when the system has changed. An arm64 pass
-shows the logic and disk layout work, so it is worth having before pushing; it doesn't show
+`release`. On a Mac without Nix, the `test-*` targets run the same checks for aarch64 in
+Docker Desktop (give it 16 GB of memory for the system tests). An M1 can't nest
+virtualization, so the VMs are emulated: the host test takes about 3 minutes, the
+installer and upgrade tests 10 to 15 each, plus building their ISO and disk image when the
+system has changed. An arm64 pass shows the logic and disk layout work; it doesn't show
 that the x86_64 system the machines run works. Only CI shows that.
 
 ## How a machine stays healthy

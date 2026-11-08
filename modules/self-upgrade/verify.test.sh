@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # What self-upgrade-verify does at boot, with and without an upgrade on trial.
 
-# On PATH; see tests/scripts.nix.
+# On PATH; see tests/unit.nix.
 source script-harness.sh
 # verify.sh, beside this file.
 scripts=$(dirname "$0")

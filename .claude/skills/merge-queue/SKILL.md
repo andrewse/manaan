@@ -108,41 +108,76 @@ conflict and names the files. It is optional — `drain` finds the same conflict
 in the same place — but it turns "something in this batch will conflict" into a
 known fact before anything has landed.
 
-## The VM tests: yours, and only for entries that could affect them
+## The tests: unit and integration per entry, system once per drain
 
-The VM tests — `<host>`, `<host>-installer` and `<host>-upgrade` for each host
-in `hosts/` — are this repository's expensive check: on this Mac they boot
-emulated VMs in Docker, and take the best part of an hour per host. So nobody
-else runs them. Worktree agents and reviewers leave them to you, and you run
-them only on an entry whose changes could affect them. `queue-drain` and
-`queue-merge` never run them, so which way an entry lands depends on this.
+This repository's tests come in three categories (see "Testing" in README.md):
+`make test-unit` and `make test-integration` take seconds, and `make
+test-system-all` boots every host in VMs — on this Mac, emulated in Docker, the
+best part of an hour per host.
 
-Take the queue **one entry at a time**, and for the head entry ask whether it
-touches anything that could change a VM test:
+**Per entry, the queue tests it for you.** `drain` and `merge` run `QUEUE_TEST`
+— here `make test-unit test-integration`, set in the Makefile — on each entry's
+squashed tree in their scratch worktree, before the target branch moves to it.
+An entry that fails stops the drain as `TESTS FAILED`, pending, with the
+target branch untouched; see **Drain it**, below. So everything that lands has
+passed them, and `make queue-drain` is how the queue lands, whatever is in it.
+
+**The system tests are yours, once, at the end of a drain** that landed
+anything that could affect them — never per entry, and nobody else runs them.
+`refs/merge-queue-verified` is the last commit they passed on. Ask what landed
+since:
 
 ```bash
-next=$(make queue-next)
-base=$(printf '%s' "$next" | cut -f5); tip=$(printf '%s' "$next" | cut -f6)
-git diff --name-only "$base" "$tip" -- . \
-    ':!*.md' ':!queue/' ':!.claude/' ':!.github/' ':!.gitignore'
+since=$(git rev-parse -q --verify refs/merge-queue-verified)
+git diff --name-only "$since" main -- . \
+    ':!*.md' ':!queue/' ':!.claude/' ':!.github/' ':!.gitignore' \
+    ':!*.test.sh' ':!*.test.nix' ':!tests/integration/' ':!tests/unit.nix' \
+    ':!tests/nix-harness.nix' ':!tests/script-harness.sh' ':!tests/script-test.nix'
 ```
 
-- **Nothing listed** — it cannot affect them. `make queue-merge` lands it, and
-  stops where `drain` would; the blockages are under **Drain it**, below.
-- **Anything listed** — land it by hand, as under **Landing the entry a
-  conflict stopped, by hand**, with the VM tests as step 4. Without a conflict,
-  step 3 and step 7 have nothing to do. A failing test blocks the entry like a
-  semantic conflict does: abort, leave it pending, and report the test and the
-  lines of its log that show why.
+- **Nothing listed** — nothing can affect them: `git update-ref
+  refs/merge-queue-verified main`, and you are done.
+- **Anything listed, or no ref yet** — run them, in the lock worktree, so
+  nothing lands or is withdrawn while the tree is being tested:
 
-The pathspec is a list of what **cannot** affect the tests, so anything not on
-it — a new top-level directory included — runs them. Add to it only what no Nix
-file reads. Err towards running them: a skipped test that would have failed
-lands on `main` unseen.
+  ```bash
+  git worktree add --detach .worktrees/.merge-queue main    # the lock
+  caffeinate -i make -C .worktrees/.merge-queue test-system-all &&
+      git update-ref refs/merge-queue-verified "$(git -C .worktrees/.merge-queue rev-parse HEAD)"
+  git worktree remove --force .worktrees/.merge-queue
+  ```
 
-`make queue-drain` lands every entry without running anything, so it is for a
-queue where every pending entry has come back with nothing listed, and not
-otherwise.
+  `caffeinate -i` because Docker Desktop's VM is paused while the Mac sleeps,
+  and a run left overnight goes nowhere.
+
+The pathspec is a list of what **cannot** affect the system tests, so anything
+not on it — a new top-level directory included — runs them. Add to it only
+what no system test reads. Err towards running them: a skipped test that would
+have failed stays on `main` unseen.
+
+### When they fail
+
+The entries are already on the target branch, which is local and not pushed,
+so `refs/merge-queue-verified` is how far it is safe to push. Find the entry
+that broke them, take it back off, and say so:
+
+1. **Find it.** The candidates are the entries landed since the ref whose
+   changes are listed above: `git log --oneline "$since..main" -- . <the
+   pathspec>`. One candidate is the culprit. With several, bisect them with
+   only the check that failed (`make test-system HOST=<host>`, or that one
+   check by name), in the lock worktree: `git bisect start main "$since"`,
+   then `git bisect run make test-system HOST=<host>`. Each step is an hour;
+   say how many you expect before starting.
+2. **Revert it** on the target branch, in the lock worktree, as a commit in
+   this repository's format — `<subsystem>: revert "<its subject>"`, with the
+   failing test and the lines of its log that show why in the body — then
+   fast-forward the target branch to it, as in step 6 of landing by hand. Add
+   a note to the revert, as for a conflict (step 7), naming the entry.
+3. **Run the system tests again** from the top of this section, so the ref
+   moves only once they pass.
+4. **Report** the entry, the test, the log lines, and that its author has to
+   submit it again with a fix. It is drained, not pending: the queue has no
+   way to un-land it, and the revert is the record.
 
 ## Drain it
 
@@ -166,12 +201,18 @@ draining onto main (2ec351a)
 landed 1, main now at 6f1c7d3, 2 still pending
 ```
 
-Clean to the end — `landed N, ... 0 still pending` — and you are done: report
-and sleep. Otherwise read what stopped it, because only one of the six kinds
-of blockage is yours to fix.
+Clean to the end — `landed N, ... 0 still pending` — and the queue is in: run
+the system tests if they are due (**The tests**, above), report and sleep.
+Otherwise read what stopped it, because only one of the seven kinds of
+blockage is yours to fix.
 
 - **CONFLICT.** Yours. The files are named. Land that one entry by hand, below,
-  then carry on with the queue from **The VM tests**, above.
+  then drain again.
+- **TESTS FAILED.** Not yours. The entry's unit or integration tests fail on
+  the tree it would land as; the drain prints their last lines and where the
+  whole log is. Report the entry and those lines. Its author fixes it with an
+  ordinary commit, which the next drain picks up, since the drain merges the
+  branch as it stands. The entries behind it wait, as for a conflict.
 - **ORPHANED.** A full stop. The entry was written on top of an entry that was
   *withdrawn*, so what it depends on will never land. Do not merge it and do
   not try to resolve it: orphaned work usually replays perfectly cleanly and is
@@ -182,9 +223,8 @@ of blockage is yours to fix.
   replaying this entry would put commits on the target branch that were written
   against a commit it has never seen. Reaching this in submission order should
   be impossible — the entry below it was submitted first — so it means the
-  order was inverted. Land the entry it names first, through **The VM tests**
-  like any other (`make queue-merge ENTRY=<entry>` will take it out of order),
-  then carry on from there. If the work it names is not in the queue at all,
+  order was inverted. Land the entry it names first (`make queue-merge
+  ENTRY=<entry>` will take it out of order), then carry on from there. If the work it names is not in the queue at all,
   report it: the author has to submit it or rebase.
 - **no merge message.** A full stop. There is nothing for the squash commit to
   say, and inventing one would put your description of someone else's change on
@@ -211,7 +251,7 @@ one entry and no more.
 
 This is the same sequence `drain` runs, with your resolution in the middle of
 it. Do all of it for **one** entry — the head of the queue — and then go back
-to **The VM tests**, above, for the next.
+to **Drain it**, above, for the rest.
 
 ### 1. Take the lock, then read the entry
 
@@ -310,21 +350,15 @@ to the queue itself that is `make queue-selftest`. A resolution that compiles in
 your head is not a resolution. This step is why landing a conflict is yours and
 not `drain`'s.
 
-For an entry that could affect the VM tests (**The VM tests**, above), they are
-part of this step, run on the replayed tree in the lock worktree, one host at a
-time:
+Whatever else it involves, that includes what `drain` would have run on it,
+`QUEUE_TEST`, on the replayed tree in the lock worktree:
 
 ```bash
-for h in $(ls hosts); do
-    caffeinate -i make -C .worktrees/.merge-queue test-local HOST="$h" || break
-done
+make -C .worktrees/.merge-queue test-unit test-integration
 ```
 
-`caffeinate -i` because Docker Desktop's VM is paused while the Mac sleeps, and
-a run left overnight goes nowhere. The lock is held throughout, which is
-right: nothing may land, and nothing may be withdrawn, while the tree that
-will land is being tested. A conflict you resolved in an affected entry is
-tested like any other change to it.
+Not the system tests: they run once, after the drain (**The tests**, above),
+and a conflict you resolved is in what they test then.
 
 Failing checks after a resolution means the entry is blocked: abort as above
 and report.
@@ -455,7 +489,7 @@ Three guards, each for something that has gone wrong before:
   tip comparison has to do the safety check `-d` would otherwise have done for
   you.
 
-Then back to **The VM tests**, above, for whatever is behind it.
+Then back to **Drain it**, above, for whatever is behind it.
 
 ## Reporting
 
@@ -463,17 +497,20 @@ Per wake-up, one short block:
 
 ```
 queue: 3 entries
-  20261013T1147  docs-testing    squashed to f00ba12, clean, VM tests not affected
-  20261013T1152  modules-sonarr  squashed to 3c1d8ae, conflict in Makefile, note added, VM tests passed
-  20261013T1159  hosts-manaan    BLOCKED: manaan-upgrade failed, rollback never ran
+  20261013T1147  docs-testing    squashed to f00ba12, tested
+  20261013T1152  modules-sonarr  squashed to 3c1d8ae, tested, conflict in Makefile, note added
+  20261013T1159  hosts-manaan    BLOCKED: tests failed, integration-manaan: each mount is its own volume
+system tests: passed on 3c1d8ae, refs/merge-queue-verified moved there
 main now at 3c1d8ae; 1 entry still pending
 ```
 
-Say for every entry landed whether the VM tests ran or were not affected.
+Say whether the system tests ran after the drain and on what, or that nothing
+that landed could affect them, and where `refs/merge-queue-verified` is.
 
 Name every blocked entry and why, every conflict you resolved, and anything you
 force-removed. Do not push, and do not tag — the target branch stays local
-unless the user asks otherwise.
+unless the user asks otherwise, and then only as far as
+`refs/merge-queue-verified`.
 
 `make queue-log` is what you have drained, `make queue-notes` is every
 resolution you have recorded, `make queue-history` is the branch's own log with

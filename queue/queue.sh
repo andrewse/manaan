@@ -113,6 +113,14 @@ HANDOVER_NS=handover
 # the branch name, so nothing about the ref layout depends on this.
 MAIN=${QUEUE_MAIN:-main}
 
+# A command the drain runs on each entry's squashed tree, in its scratch
+# worktree, before the target branch moves to it -- the repository's fast
+# tests. An entry that fails it is left pending, as one that conflicts is, so
+# everything that lands has passed it. Empty, the default, runs nothing. Set it
+# in the including Makefile, before the include:
+#     QUEUE_TEST := make test-unit
+TEST=${QUEUE_TEST:-}
+
 # How to tell the reader to invoke us. Every hint this script prints is built
 # from this, so a target repo that drives the queue with something other than
 # the shipped Makefile sets QUEUE_CLI and the hints follow it. Only the command
@@ -1472,10 +1480,22 @@ EOF
 # checkout that will not fast-forward. Entries already landed stay landed, and
 # the report names what stopped it. Exits non-zero if anything was left
 # pending that was not simply behind a blockage.
+# test_entry <worktree> <id>: runs QUEUE_TEST in <worktree>, keeping what it
+# says in a log under the common git dir, since the worktree is the drain's
+# scratch one and goes when the drain does. Prints the log's path, and fails if
+# the test does.
+test_entry() {
+    local dir=$1 id=$2 log
+    log="$(git rev-parse --path-format=absolute --git-common-dir)/merge-queue-logs/$id.log"
+    mkdir -p "$(dirname "$log")"
+    printf '%s\n' "$log"
+    ( cd "$dir" && sh -c "$TEST" ) >"$log" 2>&1
+}
+
 cmd_drain() {
     local mc lock top head landed=0 pending rc=0
     local id branch sha wt base tip orphan waiting msg squashed conflicted err
-    local next_line f
+    local next_line f log
 
     mc=$(main_checkout)
 
@@ -1603,6 +1623,18 @@ EOF
         fi
         squashed=$(git -C "$lock" rev-parse HEAD)
 
+        # The tree as it will land, tested before main moves to it. A failure
+        # is the entry's to fix, as a conflict is: it stays pending, and what
+        # is behind it waits, since that was written on top of it.
+        if [ -n "$TEST" ] && ! log=$(test_entry "$lock" "$id"); then
+            git -C "$lock" reset -q --hard "$MAIN"
+            printf '  %-23s %-26s TESTS FAILED\n' "$id" "$branch"
+            tail -n 15 "$log" | sed 's/^/           /'
+            printf '           %s, in full: %s\n' "$TEST" "$log"
+            printf "           left pending, and $MAIN untouched\n"
+            rc=1; break
+        fi
+
         # --ff-only is the safety rail and also the only check on the state of
         # the main checkout, which is the right one to have: it refuses exactly
         # when the merge would overwrite a modified tracked file or an
@@ -1617,8 +1649,8 @@ EOF
 
         cmd_complete "$id" >/dev/null
         landed=$(( landed + 1 ))
-        printf '  %-23s %-26s squashed to %s\n' \
-            "$id" "$branch" "$(git rev-parse --short "$squashed")"
+        printf '  %-23s %-26s squashed to %s%s\n' \
+            "$id" "$branch" "$(git rev-parse --short "$squashed")" "${TEST:+, tested}"
 
         # The author was told to leave the branch and the worktree alone, so clearing
         # them up is the drain's job. The tip comparison is the check
@@ -2210,7 +2242,7 @@ cmd_check() {
 # `/merge-queue`, which can do both.
 cmd_merge() {
     local want=${1:-} entry id branch sha base tip orphan parent ahead waiting
-    local mc lock wt wtp cwd msg squashed conflicted keep=''
+    local mc lock wt wtp cwd msg squashed conflicted log keep=''
 
     mc=$(main_checkout)
 
@@ -2324,6 +2356,17 @@ EOF
             --author="$(git log -1 --format='%an <%ae>' "$tip")" >/dev/null ||
         die "nothing to commit: $id ($branch) contributes nothing $MAIN does not already have"
     squashed=$(git -C "$lock" rev-parse HEAD)
+
+    # As the drain does: the tree as it will land, before main moves to it.
+    if [ -n "$TEST" ]; then
+        printf 'testing: %s\n' "$TEST"
+        if ! log=$(test_entry "$lock" "$id"); then
+            tail -n 15 "$log" | sed 's/^/    /' >&2
+            die "$(printf '%s\n\n%s\n' \
+                "$id ($branch) replayed cleanly but failed $TEST; left pending, and $MAIN is untouched." \
+                "In full: $log")"
+        fi
+    fi
 
     # --ff-only is the only check on the state of the main checkout, and it is
     # enough: it refuses exactly when the merge would overwrite a modified or

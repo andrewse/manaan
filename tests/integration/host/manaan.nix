@@ -1,0 +1,85 @@
+# manaan's own: its disk layout and endor's shares.
+{ lib, config }:
+
+let
+  fs = config.fileSystems;
+  # The mount, its volume in the pool, and the options it must have.
+  volumes = [
+    [
+      "/"
+      "root"
+      [ ]
+    ]
+    [
+      "/nix"
+      "nix"
+      [ ]
+    ]
+    [
+      "/var"
+      "var"
+      [ "nodev" ]
+    ]
+    [
+      "/home"
+      "home"
+      [
+        "nodev"
+        "nosuid"
+      ]
+    ]
+    [
+      "/tmp"
+      "tmp"
+      [
+        "nodev"
+        "nosuid"
+      ]
+    ]
+    [
+      "/var/lib/docker"
+      "docker"
+      [ ]
+    ]
+    [
+      "/var/lib/grafana"
+      "grafana"
+      [
+        "nodev"
+        "nosuid"
+      ]
+    ]
+    [
+      "/var/lib/prometheus2"
+      "prometheus"
+      [
+        "nodev"
+        "nosuid"
+      ]
+    ]
+  ];
+  shares = lib.filterAttrs (mount: _: lib.hasPrefix "/mnt/endor/" mount) fs;
+in
+{
+  "each mount is its own volume, with its mount options" = {
+    expr = lib.filter (
+      v:
+      let
+        mount = lib.elemAt v 0;
+      in
+      !(fs ? ${mount})
+      || fs.${mount}.device != "/dev/pool/${lib.elemAt v 1}"
+      || !lib.all (o: lib.elem o fs.${mount}.options) (lib.elemAt v 2)
+    ) volumes;
+    expected = [ ];
+  };
+
+  "endor's shares are mounted on first use, so the host boots without them" = {
+    expr = lib.attrNames (
+      lib.filterAttrs (
+        _: share: !(lib.elem "x-systemd.automount" share.options && lib.elem "nofail" share.options)
+      ) shares
+    );
+    expected = [ ];
+  };
+}

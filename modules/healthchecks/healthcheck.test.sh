@@ -1,7 +1,7 @@
 # shellcheck shell=bash disable=SC2016 # stub bodies expand in the stub
 # How the healthchecks treat a check that is healthy, starting or unhealthy.
 
-# On PATH; see tests/scripts.nix.
+# On PATH; see tests/unit.nix.
 source script-harness.sh
 # healthcheck.sh, beside this file.
 scripts=$(dirname "$0")

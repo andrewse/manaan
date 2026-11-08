@@ -4,9 +4,10 @@ SYSTEM := x86_64-linux
 NIX    := nix --extra-experimental-features 'nix-command flakes'
 AGENIX := $(NIX) run github:ryantm/agenix --
 
-# test-local: Nix in an arm64 container, its store kept in a volume between runs.
-# Docker Desktop on an M1 can't nest virtualization, so the test VMs are emulated;
-# kvm is claimed only to get the test driver to run them.
+# Where the tests' Nix runs: Nix itself, or on a Mac without it, Nix in an arm64
+# container, its store kept in a volume between runs. Docker Desktop on an M1
+# can't nest virtualization, so there the system tests' VMs are emulated; kvm is
+# claimed only to get the test driver to run them.
 define LOCAL_NIX_CONFIG
 experimental-features = nix-command flakes
 sandbox = false
@@ -20,15 +21,26 @@ GIT_COMMON := $(shell git rev-parse --path-format=absolute --git-common-dir)
 DOCKER_NIX := docker run --rm --platform linux/arm64 -v "$(CURDIR)":"$(CURDIR)":ro \
 	-v "$(GIT_COMMON)":"$(GIT_COMMON)":ro \
 	-v machine-configs-nix:/nix -e NIX_CONFIG nixos/nix:latest
-LOCAL_CHECKS = git+file://$(CURDIR)\#checks.aarch64-linux
+ifneq ($(shell command -v nix 2>/dev/null),)
+in-nix = $(1)
+TEST_NIX := $(NIX)
+TEST_FLAKE := .
+TEST_SYSTEM := $(SYSTEM)
+else
+export NIX_CONFIG := $(LOCAL_NIX_CONFIG)
+in-nix = $(DOCKER_NIX) sh -c 'git config --global --add safe.directory "*" && $(1)'
+TEST_NIX := nix
+TEST_FLAKE := git+file://$(CURDIR)
+TEST_SYSTEM := aarch64-linux
+endif
 
 .DEFAULT_GOAL := help
-.PHONY: help check release update fmt fmt-check build build-all test-scripts test test-all test-local vm iso isos lock enroll secret rekey status
+.PHONY: help check release update fmt fmt-check build build-all test-unit test-integration test-system test-system-all vm iso isos lock enroll secret rekey status
 
 help: ## List targets
-	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
+	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-17s %s\n", $$1, $$2}'
 
-check: fmt-check build-all test-scripts test-all ## Everything CI runs before releasing
+check: fmt-check build-all test-unit test-integration test-system-all ## Everything CI runs before releasing
 
 # Machines deploy origin's release branch, so it only moves to a commit that is on
 # main and passes check. A plain push only fast-forwards, so a late run can't move it back.
@@ -58,23 +70,21 @@ build: ## Build HOST's system
 build-all:
 	@for h in $(HOSTS); do $(MAKE) --no-print-directory build HOST=$$h || exit 1; done
 
-test-scripts: ## Run the self-upgrade, installer, healthcheck and service command scripts against stubs, one case per behaviour (no VM)
-	$(NIX) build -L --no-link $(foreach s,upgrade verify install healthcheck service-command,.#checks.$(SYSTEM).script-$(s))
+# The tests, in three categories (see flake.nix). Without Nix, they run in Docker.
+test-unit: ## One script or module on its own, against stubs, one case per behaviour (seconds)
+	$(call in-nix,$(TEST_NIX) build -L --no-link $(TEST_FLAKE)#tests.unit)
 
-test: ## Boot HOST in VMs: health, network and git tests, install from the ISO, upgrades (needs x86_64 Linux with KVM)
-	$(NIX) build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,.#checks.$(SYSTEM).$(t))
+test-integration: ## Scripts and modules together: rollback across reboots, git through the wrapper, each host's whole config (no VM)
+	$(call in-nix,$(TEST_NIX) build -L --no-link $(TEST_FLAKE)#tests.integration)
 
-test-all:
-	@for h in $(HOSTS); do $(MAKE) --no-print-directory test HOST=$$h || exit 1; done
+test-system: ## Boot HOST in VMs: the host, installing it from the ISO, upgrading it (an hour emulated; the merge queue runs it)
+	$(call in-nix,$(TEST_NIX) build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,$(TEST_FLAKE)#checks.$(TEST_SYSTEM).system-$(t)))
 
-test-local: export NIX_CONFIG := $(LOCAL_NIX_CONFIG)
-test-local: ## On a Mac, without Nix: HOST's tests on aarch64 in Docker Desktop (give it 16 GB); CI runs them on x86_64
-	$(DOCKER_NIX) sh -c 'git config --global --add safe.directory "*" && \
-		nix build -L --no-link $(foreach s,upgrade verify install healthcheck service-command,$(LOCAL_CHECKS).script-$(s)) && \
-		nix build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,$(LOCAL_CHECKS).$(t))'
+test-system-all:
+	@for h in $(HOSTS); do $(MAKE) --no-print-directory test-system HOST=$$h || exit 1; done
 
 vm: ## Interactive VM test driver for HOST
-	$(NIX) run .#checks.$(SYSTEM).$(HOST).driverInteractive
+	$(NIX) run .#checks.$(SYSTEM).system-$(HOST).driverInteractive
 
 iso: ## Build HOST's self-installing ISO into out/
 	mkdir -p out
@@ -108,5 +118,7 @@ status: ## Show HOST's upgrade and healthcheck state
 		echo "pending:  $$(cat /var/lib/self-upgrade/pending 2>/dev/null)"; \
 		echo "bad revs:"; cat /var/lib/self-upgrade/bad-revs 2>/dev/null'
 
-# The merge queue's queue-* targets; `make queue-help` lists them.
+# The merge queue's queue-* targets; `make queue-help` lists them. Each entry
+# lands only once these pass on the tree it would land as.
+QUEUE_TEST := make --no-print-directory test-unit test-integration
 include queue/queue.mk

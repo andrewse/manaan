@@ -259,8 +259,11 @@ all still resolve to the squash.
 can, in order, and stops at the first one that needs a decision rather than
 making it. The replay is the conflict test — it happens in the scratch worktree
 and the target branch is only written by the fast-forward afterwards — so an
-entry it will not merge leaves the branch exactly as it was. What it stops on is
-the agent's work: the agent resolves, records the note, and runs `drain` again.
+entry it will not merge leaves the branch exactly as it was. With `QUEUE_TEST`
+set in the Makefile, it also runs that on each entry's squashed tree there, and
+stops on an entry that fails it, which stays pending for its author to fix.
+What it stops on is otherwise the agent's work: the agent resolves, records the
+note, and runs `drain` again.
 
 Conflicts are resolved by that agent, never by `drain`, and **every resolution
 is recorded as a git note** on the resulting commit: what the two sides did,

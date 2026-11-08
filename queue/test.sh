@@ -30,6 +30,11 @@ ISANDBOX=''
 [ -n "${KEEP:-}" ] ||
     trap 'rm -rf "$SANDBOX" ${MSANDBOX:+"$MSANDBOX"} ${ISANDBOX:+"$ISANDBOX"}' EXIT
 
+# `make queue-selftest` exports the repository's own QUEUE_TEST, which would
+# run that repository's tests in these sandboxes. The case that wants one sets
+# its own.
+unset QUEUE_TEST
+
 failures=0
 checks=0
 
@@ -436,6 +441,50 @@ git -C "$MSANDBOX" show-ref --verify --quiet refs/heads/api-on-master &&
 
 out=$(mq . list)
 contains 'queue is empty' "$out" 'and the queue is empty again'
+
+# --- an entry its tests fail ----------------------------------------------
+
+case_ 'an entry the tests fail is left pending, and lands once fixed'
+
+# QUEUE_TEST runs on the entry's squashed tree, in the drain's scratch
+# worktree, before the target branch moves. These "tests" fail while the tree
+# has a file called broken.
+tq() { local dir=$1; shift; ( cd "$MSANDBOX/$dir" && QUEUE_MAIN=master QUEUE_TEST='test ! -e broken' "$QUEUE" "$@" ); }
+
+out=$(mq . worktree api-broken)
+bwt=$(printf '%s\n' "$out" | sed -n 's/^worktree  *//p')
+bdir=${bwt#"$MSANDBOX"/}
+printf 'oops\n' > "$MSANDBOX/$bdir/broken"
+git -C "$MSANDBOX/$bdir" add broken
+git -C "$MSANDBOX/$bdir" commit -q -m 'api: add g, broken'
+mq "$bdir" submit -m 'api: add g
+
+An entry its tests fail, until it is fixed.' >/dev/null
+before=$(git -C "$MSANDBOX" rev-parse master)
+
+out=$(tq . drain) || true
+contains 'TESTS FAILED' "$out" 'the drain stops on the entry its tests fail'
+equal "$(git -C "$MSANDBOX" rev-parse master)" "$before" 'and leaves master where it was'
+contains 'api-broken' "$(mq . list)" 'and the entry pending'
+[ -d "$MSANDBOX/.worktrees/.merge-queue" ] &&
+    bad 'and lets go of the drain lock' || ok 'and lets go of the drain lock'
+
+if out=$(tq . merge api-broken 2>&1); then
+    bad 'merge refuses it too' "$out"
+else
+    contains 'failed test ! -e broken' "$out" 'merge refuses it too'
+fi
+equal "$(git -C "$MSANDBOX" rev-parse master)" "$before" 'and leaves master where it was'
+
+git -C "$MSANDBOX/$bdir" rm -q broken
+printf 'g\n' > "$MSANDBOX/$bdir/g.txt"
+git -C "$MSANDBOX/$bdir" add g.txt
+git -C "$MSANDBOX/$bdir" commit -q -m 'api: add g, not broken'
+
+out=$(tq . drain)
+contains 'landed 1' "$out" 'once fixed, it lands'
+contains ', tested' "$out" 'having been tested'
+equal "$(git -C "$MSANDBOX" show master:g.txt)" g 'with its fix'
 
 # --- the tooling has to be committed, not just installed -----------------
 

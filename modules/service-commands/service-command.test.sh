@@ -1,7 +1,7 @@
 # shellcheck shell=bash disable=SC2016 # stub bodies expand in the stub
 # What each service command runs, for a service with a unit and for one without.
 
-# On PATH; see tests/scripts.nix.
+# On PATH; see tests/unit.nix.
 source script-harness.sh
 # service-command.sh, beside this file.
 scripts=$(dirname "$0")

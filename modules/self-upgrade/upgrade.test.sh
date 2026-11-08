@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # What self-upgrade does when the release branch moves.
 
-# On PATH; see tests/scripts.nix.
+# On PATH; see tests/unit.nix.
 source script-harness.sh
 # upgrade.sh, beside this file.
 scripts=$(dirname "$0")
