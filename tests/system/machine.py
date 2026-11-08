@@ -310,7 +310,7 @@ def installed(image, cache, key, timeout=3600):
 
     shutil.rmtree(cache, ignore_errors=True)
     cache.mkdir(parents=True)
-    subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", disk, "160G"], check=True)
+    subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", disk, "200G"], check=True)
     with Machine(image, cache / "run", disk, key) as host:
         # Also match the failure, so a failed install fails here and not at the timeout.
         host.wait_for_console(f"installed {image.name}, rebooting|installing {image.name} failed", timeout)

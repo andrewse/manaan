@@ -181,7 +181,7 @@ Grafana's dashboard shows CPU, memory, disks and network, whether each healthche
 unit is up, and CPU and memory per systemd service and per Docker container. It is
 provisioned from `modules/services/grafana/dashboard/`; edits made in the web UI don't
 stick. Log in as `admin` with the password generated on first start
-(`sudo cat /var/lib/grafana/admin-password`). Prometheus keeps 90 days or 2GB,
+(`sudo cat /var/lib/grafana/admin-password`). Prometheus keeps 90 days or 16GB,
 whichever is less, on a volume of its own.
 
 ## Disk layout
@@ -193,18 +193,18 @@ volume, so a full `/var` or `/tmp` can't take `/` or `/nix` down with it:
 | --- | --- | --- |
 | `/boot` | 1G (GPT partition) | `umask=0077` |
 | `/` | 6G | |
-| `/nix` | 20G | `noatime` |
-| `/var` | 10G | `nodev` |
+| `/nix` | 30G | `noatime` |
+| `/var` | 23G | `nodev` |
 | `/home` | 8G | `nodev,nosuid` |
 | `/tmp` | 4G, cleared at boot | `nodev,nosuid` |
 | `/var/lib/docker` | 100G | |
-| `/var/lib/grafana` | 1G | `nodev,nosuid` |
-| `/var/lib/prometheus2` | 3G: 2GB of retention, plus room to compact | `nodev,nosuid` |
+| `/var/lib/grafana` | 5G | `nodev,nosuid` |
+| `/var/lib/prometheus2` | 20G: 16GB of retention, plus room to compact | `nodev,nosuid` |
 | swap | 2G, `swappiness=10` | last resort against the OOM killer |
 
-Sized for a 160G zvol, leaving ~5G of the pool unallocated. To grow a volume
-on the running machine: `sudo lvextend -r -L +5G pool/var`. To grow the pool,
-enlarge the zvol in TrueNAS, then `sudo growpart /dev/vda 2 && sudo pvresize /dev/vda2`.
+Sized for a 200G zvol, which it all but fills. To grow a volume, enlarge the zvol
+in TrueNAS, then `sudo growpart /dev/vda 2 && sudo pvresize /dev/vda2`, then on the
+running machine `sudo lvextend -r -L +5G pool/var`.
 
 ## Setting up a new machine
 
@@ -219,7 +219,7 @@ installing needs no network. When it boots:
 
 For a TrueNAS VM:
 
-1. Create the VM with UEFI boot, a VirtIO NIC, the zvol (at least 160G) as a VirtIO disk with
+1. Create the VM with UEFI boot, a VirtIO NIC, the zvol (at least 200G) as a VirtIO disk with
    boot order 1001, and the ISO as a CD-ROM with boot order 1002. The ISO can stay
    attached: once installed, the disk boots first. If the zvol is ever wiped,
    the next boot reinstalls.

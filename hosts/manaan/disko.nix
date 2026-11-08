@@ -1,7 +1,7 @@
 # Partitioning for the zvol, written by the installer ISO. Each mount is its own
-# LVM volume so one filling up can't fill the others. Sized for a 160G zvol: about
-# 5G of the pool is left unallocated on purpose, to grow whichever volume needs
-# it while mounted, e.g. `lvextend -r -L +5G pool/var`. ext4 rather than a
+# LVM volume so one filling up can't fill the others. Sized for a 200G zvol, which
+# it all but fills: about 1G is left for the partition table and LVM's metadata.
+# To grow a volume, enlarge the zvol first (see README). ext4 rather than a
 # copy-on-write filesystem: the zvol is already CoW and is snapshotted by TrueNAS.
 let
   ext4 = mountpoint: options: {
@@ -49,11 +49,13 @@ in
         };
         # Grows with every system generation; garbage collected weekly.
         nix = {
-          size = "20G";
+          size = "30G";
           content = ext4 "/nix" [ "noatime" ];
         };
+        # Most services' state (Sonarr, Radarr, SABnzbd, NZBHydra2, Gatus,
+        # Syncthing's database) and the journal share it.
         var = {
-          size = "10G";
+          size = "23G";
           content = ext4 "/var" [ "nodev" ];
         };
         home = {
@@ -69,18 +71,18 @@ in
           content = ext4 "/var/lib/docker" [ ];
         };
         # Grafana's database: users, sessions, annotations. Tens of MB; the
-        # dashboards are provisioned from the store.
+        # dashboards are provisioned from the store, so the rest is headroom.
         grafana = {
-          size = "1G";
+          size = "5G";
           content = ext4 "/var/lib/grafana" [
             "nodev"
             "nosuid"
           ];
         };
-        # Prometheus's TSDB, capped at 2GB by its retention; the rest is room
+        # Prometheus's TSDB, capped at 16GB by its retention; the rest is room
         # for compaction, which writes a new block before deleting the old ones.
         prometheus = {
-          size = "3G";
+          size = "20G";
           content = ext4 "/var/lib/prometheus2" [
             "nodev"
             "nosuid"
