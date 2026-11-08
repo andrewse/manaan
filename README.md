@@ -1,4 +1,4 @@
-# machine_configs
+# manaan
 
 NixOS configurations for my machines. Each machine pulls this repo and upgrades
 itself; nothing is pushed to machines.
