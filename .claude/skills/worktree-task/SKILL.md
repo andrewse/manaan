@@ -183,11 +183,11 @@ integration test under `tests/integration/` for scripts or modules working
 together.
 
 **Not the system tests.** `make test-system`, `test-system-all` and `check`
-boot every host in VMs, which on this Mac means the best part of an hour per
-host, emulated in Docker. The merge queue runs them once, after a drain, on
-everything that landed — see **The tests** in
-`.claude/skills/merge-queue/SKILL.md`. Running them here as well costs that
-hour on a tree that is not the one that lands.
+install, boot and upgrade every host in QEMU, about ten minutes per host on
+this Mac plus rebuilding its image. The merge queue runs them once, after a
+drain, on everything that landed — see **The tests** in
+`.claude/skills/merge-queue/SKILL.md`. Running them here as well spends that
+on a tree that is not the one that lands.
 
 ## 4. The merge message, written last
 

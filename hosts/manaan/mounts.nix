@@ -1,6 +1,7 @@
 # Shares on endor, the TrueNAS host this VM runs on. Each is mounted on first
 # access rather than at boot, so manaan boots (and passes its healthchecks)
-# whether or not endor is serving them yet.
+# whether or not endor is serving them yet. In the system tests each is a local
+# directory instead, open to all as the SMB shares are mounted.
 { config, lib, ... }:
 
 let
@@ -31,9 +32,8 @@ let
     ]
     ++ automount;
   };
-in
-{
-  fileSystems = {
+
+  shares = {
     "/mnt/endor/syncthing" = nfs "syncthing";
     "/mnt/endor/pictures" = nfs "pictures";
     "/mnt/endor/movies" = nfs "media/movies";
@@ -48,6 +48,12 @@ in
     "/mnt/endor/stuff" = cifs "stuff";
     "/mnt/endor/downloads" = cifs "downloads";
   };
+in
+{
+  fileSystems = lib.mkIf (!config.machine.localShares) shares;
+  systemd.tmpfiles.settings.endor-shares = lib.mkIf config.machine.localShares (
+    lib.mapAttrs (_: _: { d.mode = "0777"; }) shares
+  );
 
   machine.secrets.use = [ "smb-credentials" ];
 

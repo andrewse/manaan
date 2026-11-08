@@ -112,8 +112,9 @@ known fact before anything has landed.
 
 This repository's tests come in three categories (see "Testing" in README.md):
 `make test-unit` and `make test-integration` take seconds, and `make
-test-system-all` boots every host in VMs — on this Mac, emulated in Docker, the
-best part of an hour per host.
+test-system-all` installs, boots and upgrades every host in QEMU — on this Mac,
+about ten minutes per host, plus building its image in Docker when it has
+changed.
 
 **Per entry, the queue tests it for you.** `drain` and `merge` run `QUEUE_TEST`
 — here `make test-unit test-integration`, set in the Makefile — on each entry's
@@ -147,8 +148,9 @@ git diff --name-only "$since" main -- . \
   git worktree remove --force .worktrees/.merge-queue
   ```
 
-  `caffeinate -i` because Docker Desktop's VM is paused while the Mac sleeps,
-  and a run left overnight goes nowhere.
+  `caffeinate -i` because the test VMs, and Docker Desktop's VM building their
+  images, are paused while the Mac sleeps, and a run left overnight goes
+  nowhere.
 
 The pathspec is a list of what **cannot** affect the system tests, so anything
 not on it — a new top-level directory included — runs them. Add to it only
@@ -166,8 +168,9 @@ that broke them, take it back off, and say so:
    pathspec>`. One candidate is the culprit. With several, bisect them with
    only the check that failed (`make test-system HOST=<host>`, or that one
    check by name), in the lock worktree: `git bisect start main "$since"`,
-   then `git bisect run make test-system HOST=<host>`. Each step is an hour;
-   say how many you expect before starting.
+   then `git bisect run make test-system HOST=<host>`. Each step is about ten
+   minutes, more when the image has to be rebuilt; say how many you expect
+   before starting.
 2. **Revert it** on the target branch, in the lock worktree, as a commit in
    this repository's format — `<subsystem>: revert "<its subject>"`, with the
    failing test and the lines of its log that show why in the body — then

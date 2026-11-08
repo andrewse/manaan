@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # The git server end to end, without sshd: git pushes and clones over an ssh
 # that runs the git user's ForceCommand, the wrapper, as sshd does. git is the
-# real one on both ends; only logger is stubbed. tests/system/host.nix pushes
+# real one on both ends; only logger is stubbed. tests/system/test_host.py pushes
 # and clones through the real sshd.
 #
 #   git-server.test.sh <dir with wrapper.sh>

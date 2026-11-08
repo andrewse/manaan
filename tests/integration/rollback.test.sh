@@ -4,7 +4,7 @@
 # firmware and boot loader are faked, so that what each boot starts follows
 # from what the scripts told bootctl and switch-to-configuration; the releases
 # are fake systems that come up healthy, come up unhealthy, or panic.
-# tests/system/upgrade.nix tells the same story in a VM, against the real
+# tests/system/test_upgrade.py tells the same story in a VM, against the real
 # firmware.
 #
 #   rollback.test.sh <dir with upgrade.sh, verify.sh and lib.sh>

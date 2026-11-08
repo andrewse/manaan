@@ -8,5 +8,6 @@
     ./sandbox.nix
     ./notify.nix
     ./autostart.nix
+    ./shares.nix
   ];
 }

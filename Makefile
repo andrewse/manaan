@@ -5,21 +5,20 @@ NIX    := nix --extra-experimental-features 'nix-command flakes'
 AGENIX := $(NIX) run github:ryantm/agenix --
 
 # Where the tests' Nix runs: Nix itself, or on a Mac without it, Nix in an arm64
-# container, its store kept in a volume between runs. Docker Desktop on an M1
-# can't nest virtualization, so there the system tests' VMs are emulated; kvm is
-# claimed only to get the test driver to run them.
+# container, its store kept in a volume between runs. Nix only builds there; the
+# system tests boot what it built in QEMU on the Mac itself, under HVF.
 define LOCAL_NIX_CONFIG
 experimental-features = nix-command flakes
 sandbox = false
 filter-syscalls = false
-system-features = nixos-test benchmark big-parallel kvm
 endef
 # Mounted at their own paths, not /repo: in a worktree (the merge queue runs these
 # in one) .git points into the main checkout's .git by absolute path, and that
 # records the worktree's path in turn.
 GIT_COMMON := $(shell git rev-parse --path-format=absolute --git-common-dir)
-DOCKER_NIX := docker run --rm --platform linux/arm64 -v "$(CURDIR)":"$(CURDIR)":ro \
-	-v "$(GIT_COMMON)":"$(GIT_COMMON)":ro \
+# out/ is the one place it writes: the system tests' images are copied there.
+DOCKER_NIX := docker run --rm --platform linux/arm64 -w "$(CURDIR)" -v "$(CURDIR)":"$(CURDIR)":ro \
+	-v "$(GIT_COMMON)":"$(GIT_COMMON)":ro -v "$(CURDIR)/out":"$(CURDIR)/out" \
 	-v machine-configs-nix:/nix -e NIX_CONFIG nixos/nix:latest
 ifneq ($(shell command -v nix 2>/dev/null),)
 in-nix = $(1)
@@ -35,7 +34,7 @@ TEST_SYSTEM := aarch64-linux
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help check release update fmt fmt-check build build-all test-unit test-integration test-system test-system-all vm iso isos lock enroll secret rekey status
+.PHONY: help check release update fmt fmt-check build build-all test-unit test-integration system-image test-system test-system-all vm iso isos lock enroll secret rekey status
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-17s %s\n", $$1, $$2}'
@@ -77,14 +76,31 @@ test-unit: ## One script or module on its own, against stubs, one case per behav
 test-integration: ## Scripts and modules together: rollback across reboots, git through the wrapper, each host's whole config (no VM)
 	$(call in-nix,$(TEST_NIX) build -L --no-link $(TEST_FLAKE)#tests.integration)
 
-test-system: ## Boot HOST in VMs: the host, installing it from the ISO, upgrading it (an hour emulated; the merge queue runs it)
-	$(call in-nix,$(TEST_NIX) build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,$(TEST_FLAKE)#checks.$(TEST_SYSTEM).system-$(t)))
+# The system tests: Nix builds what they boot into out/system/HOST/image, copied
+# out of the store so QEMU can read it without Nix, and only again once it
+# changes. The tests themselves are pytest, in a venv of their own.
+IMAGE := out/system/$(HOST)/image
+VENV  := out/system/venv
+system-image: ## Build what the system tests boot for HOST (its installer ISO, host.json) into out/system/HOST/image
+	@mkdir -p out/system/$(HOST)
+	$(call in-nix,p=$$($(TEST_NIX) build -L --no-link --print-out-paths $(TEST_FLAKE)#tests.system.$(HOST)) && \
+		if [ "$$(cat $(IMAGE)/source 2>/dev/null)" != "$$p" ]; then \
+			rm -rf $(IMAGE) && mkdir $(IMAGE) && cp -L --no-preserve=mode "$$p"/* $(IMAGE) && echo "$$p" > $(IMAGE)/source; \
+		fi)
+
+$(VENV)/stamp: tests/system/requirements.txt
+	python3 -m venv $(VENV)
+	$(VENV)/bin/pip install --quiet --requirement $<
+	touch $@
+
+test-system: system-image $(VENV)/stamp ## Boot HOST in QEMU and test it from outside: installing it from the ISO, the host, upgrading it (ARGS for pytest)
+	PYTHONDONTWRITEBYTECODE=1 $(VENV)/bin/pytest tests/system --image $(IMAGE) $(ARGS)
 
 test-system-all:
 	@for h in $(HOSTS); do $(MAKE) --no-print-directory test-system HOST=$$h || exit 1; done
 
-vm: ## Interactive VM test driver for HOST
-	$(NIX) run .#checks.$(SYSTEM).system-$(HOST).driverInteractive
+vm: system-image $(VENV)/stamp ## Boot HOST's system test image, installed, and leave it running to SSH into
+	PYTHONDONTWRITEBYTECODE=1 $(VENV)/bin/python tests/system/vm.py $(IMAGE)
 
 iso: ## Build HOST's self-installing ISO into out/
 	mkdir -p out

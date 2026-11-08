@@ -89,26 +89,40 @@ stops at `check`, before pushing anything.
 
 ## Testing
 
-Three categories, each a make target and a prefix on the flake's checks:
+Three categories, each a make target. Unit and integration tests are the flake's checks,
+by prefix; the system tests are a pytest suite that boots what the flake builds:
 
-| Target | Checks | What |
+| Target | What it runs | What |
 | --- | --- | --- |
-| `make test-unit` | `unit-*` | One script or module on its own, one case per behaviour: a script against stubbed commands (`<name>.test.sh` beside it), a module evaluated with no other module of this repo's (`<name>.test.nix` beside it). Seconds |
-| `make test-integration` | `integration-*` | Several together, still with nothing outside the build: self-upgrade across reboots against a fake firmware (`rollback`), git through the wrapper (`git-server`), and each host's whole config as it ships (`<host>`). Seconds |
-| `make test-system` | `system-<host>`, `-installer`, `-upgrade` | The host in VMs: next to a client (SSH, git, the sandbox, healthchecks); installed from its ISO onto a blank disk; upgraded from an image of it installed, keeping a good release and rolling back one that fails its healthchecks or can't boot |
+| `make test-unit` | checks `unit-*` | One script or module on its own, one case per behaviour: a script against stubbed commands (`<name>.test.sh` beside it), a module evaluated with no other module of this repo's (`<name>.test.nix` beside it). Seconds |
+| `make test-integration` | checks `integration-*` | Several together, still with nothing outside the build: self-upgrade across reboots against a fake firmware (`rollback`), git through the wrapper (`git-server`), and each host's whole config as it ships (`<host>`). Seconds |
+| `make test-system` | `tests/system/test_*.py` | The host in a VM, tested from outside: installed from its ISO onto a blank disk (`test_installer`); SSH, git, its web services, the sandbox and healthchecks (`test_host`); upgraded, keeping a good release and rolling back one that fails its healthchecks or can't boot (`test_upgrade`) |
 
 Unit and integration tests are what a change is checked with: every worktree runs them,
 and the merge queue runs them on each entry before it lands. The system tests are few and
 slow, so the queue runs them once after a drain, if what landed could affect them, and
 marks the commit they passed on as `refs/merge-queue-verified`.
 
-CI runs every check on x86_64 with KVM (`make check`), and only a passing run moves
-`release`. On a Mac without Nix, the `test-*` targets run the same checks for aarch64 in
-Docker Desktop (give it 16 GB of memory for the system tests). An M1 can't nest
-virtualization, so the VMs are emulated: the host test takes about 3 minutes, the
-installer and upgrade tests 10 to 15 each, plus building their ISO and disk image when the
-system has changed. An arm64 pass shows the logic and disk layout work; it doesn't show
-that the x86_64 system the machines run works. Only CI shows that.
+The system tests see a host only as its users would. The runner is QEMU and Python on the
+machine running them, macOS or Linux, with no Nix: it boots the host, talks to it over SSH
+as a test admin and over HTTP through QEMU's user network (a private network to the host,
+so its internal-only ports answer), watches its serial console, and serves its release
+branch from a git daemon of its own. Nix only builds what it boots, `tests.system.<host>`
+(`tests/system/default.nix`): the host's installer ISO, installing the host with the few
+changes in `tests/system/tested.nix`, and `host.json`, what the tests need to know about
+the config. `make system-image` builds it into `out/system/<host>/image`; the install is
+cached beside it until it changes, and every test starts from a copy-on-write overlay of
+it. Endor's shares are local directories there (`machine.localShares`).
+
+Needs: QEMU (`brew install qemu`; on Ubuntu `qemu-system-x86 qemu-utils ovmf`), whose own
+UEFI firmware it boots with, and Python 3 for the venv `make test-system` creates. CI runs
+everything on x86_64 under KVM (`make check`), and only a passing run moves `release`. On a
+Mac without Nix, Docker Desktop builds the image for aarch64 (Nix in an arm64 container, its
+store in the `machine-configs-nix` volume) and QEMU boots it on the Mac itself under HVF, so
+nothing is emulated or nested. An arm64 pass shows the logic and disk layout work; it
+doesn't show that the x86_64 system the machines run works. Only CI shows that.
+
+`make vm` boots the installed image and leaves it running, printing the SSH command.
 
 ## How a machine stays healthy
 

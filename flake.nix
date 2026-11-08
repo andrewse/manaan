@@ -74,9 +74,10 @@
           (mkInstaller system self.nixosConfigurations.${name}).config.system.build.isoImage;
       });
 
-      # Three categories, by prefix: unit-* (one script or module on its own),
+      # Two categories, by prefix: unit-* (one script or module on its own) and
       # integration-* (several together, still with nothing outside the
-      # sandbox) and system-* (a host in VMs). `make test-<category>` runs one.
+      # sandbox). `make test-<category>` runs one. The system tests aren't
+      # checks: see tests.system below.
       checks = forSystems (
         system:
         let
@@ -98,36 +99,34 @@
           inherit pkgs;
           hosts = self.nixosConfigurations;
         }
-        // forHosts (name: {
-          "system-${name}" = import ./tests/system/host.nix {
-            inherit pkgs name;
-            modules = hostModules name;
-          };
-          "system-${name}-installer" = import ./tests/system/installer.nix {
-            inherit pkgs name;
-            modules = hostModules name;
-            mkInstaller = mkInstaller system;
-          };
-          "system-${name}-upgrade" = import ./tests/system/upgrade.nix {
-            inherit pkgs name;
-            modules = hostModules name;
-            mkHost = mkHost system;
-            mkInstaller = mkInstaller system;
-          };
-        })
       );
 
       # The unit and integration checks as one derivation each, for `make
-      # test-unit` and `make test-integration`: `nix build .#tests.unit`.
+      # test-unit` and `make test-integration`: `nix build .#tests.unit`. And
+      # what the system tests boot, for each host: `nix build .#tests.system.<host>`
+      # builds it, and tests/system/*.py runs it, without Nix (`make test-system`).
       legacyPackages = forSystems (system: {
-        tests = nixpkgs.lib.genAttrs [ "unit" "integration" ] (
-          category:
-          nixpkgs.legacyPackages.${system}.linkFarmFromDrvs "test-${category}" (
-            nixpkgs.lib.attrValues (
-              nixpkgs.lib.filterAttrs (name: _: nixpkgs.lib.hasPrefix "${category}-" name) self.checks.${system}
+        tests =
+          nixpkgs.lib.genAttrs [ "unit" "integration" ] (
+            category:
+            nixpkgs.legacyPackages.${system}.linkFarmFromDrvs "test-${category}" (
+              nixpkgs.lib.attrValues (
+                nixpkgs.lib.filterAttrs (name: _: nixpkgs.lib.hasPrefix "${category}-" name) self.checks.${system}
+              )
             )
           )
-        );
+          // {
+            system = nixpkgs.lib.genAttrs hosts (
+              name:
+              import ./tests/system {
+                inherit name;
+                pkgs = nixpkgs.legacyPackages.${system};
+                modules = hostModules name;
+                mkHost = mkHost system;
+                mkInstaller = mkInstaller system;
+              }
+            );
+          };
       });
 
       formatter = forSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
