@@ -1,3 +1,5 @@
+{ config, lib, ... }:
+
 {
   imports = [
     ./hardware.nix
@@ -13,8 +15,8 @@
     repoDir = "/mnt/endor/repos";
   };
   # The IDs that own the repos share on endor.
-  users.users.git.uid = 3007;
-  users.groups.git.gid = 3010;
+  users.users.git = lib.mkIf config.machine.gitServer.enable { uid = 3007; };
+  users.groups.git = lib.mkIf config.machine.gitServer.enable { gid = 3010; };
   machine.selfUpgrade.enable = true;
 
   # Each set up in modules/services/.

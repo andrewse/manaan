@@ -34,7 +34,7 @@ in
   ];
 
   # The module copies in cert.pem and key.pem; the web UI's pair goes in alongside.
-  systemd.services.syncthing.serviceConfig.ExecStartPre = lib.mkIf useKeys (
+  systemd.services.syncthing.serviceConfig.ExecStartPre = lib.mkIf (cfg.enable && useKeys) (
     lib.mkAfter [
       "+${pkgs.writers.writeBash "syncthing-copy-https-keys" ''
         install -Dm644 -o ${cfg.user} -g ${cfg.group} ${./syncthing/https-cert.pem} ${cfg.configDir}/https-cert.pem
@@ -45,10 +45,12 @@ in
 
   # The same IDs as on the old host, so files it wrote to the NFS shares
   # (which go by numeric ID) still belong to it.
-  users.users.syncthing = {
-    uid = lib.mkForce 3001;
-    # Implied by the module's own UID, which is in the system range; 3001 isn't.
-    isSystemUser = true;
+  users = lib.mkIf cfg.enable {
+    users.syncthing = {
+      uid = lib.mkForce 3001;
+      # Implied by the module's own UID, which is in the system range; 3001 isn't.
+      isSystemUser = true;
+    };
+    groups.syncthing.gid = lib.mkForce 989;
   };
-  users.groups.syncthing.gid = lib.mkForce 989;
 }

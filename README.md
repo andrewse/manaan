@@ -95,7 +95,7 @@ by prefix; the system tests are a pytest suite that boots what the flake builds:
 | Target | What it runs | What |
 | --- | --- | --- |
 | `make test-unit` | checks `unit-*` | One script or module on its own, one case per behaviour: a script against stubbed commands (`<name>.test.sh` beside it), a module evaluated with no other module of this repo's (`<name>.test.nix` beside it). Seconds |
-| `make test-integration` | checks `integration-*` | Several together, still with nothing outside the build: self-upgrade across reboots against a fake firmware (`rollback`), git through the wrapper (`git-server`), and each host's whole config as it ships (`<host>`). Seconds |
+| `make test-integration` | checks `integration-*` | Several together, still with nothing outside the build: self-upgrade across reboots against a fake firmware (`rollback`), git through the wrapper (`git-server`), and each host's whole config as it ships (`<host>`), and again with every service switched off and with every one on (`<host>-all-services-off`, `-on`). Seconds |
 | `make test-system` | `tests/system/test_*.py` | The host in a VM, tested from outside: installed from its ISO onto a blank disk (`test_installer`); SSH, git, its web services, the sandbox and healthchecks (`test_host`); upgraded, keeping a good release and rolling back one that fails its healthchecks or can't boot (`test_upgrade`) |
 
 Unit and integration tests are what a change is checked with: every worktree runs them,

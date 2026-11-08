@@ -6,6 +6,9 @@
 #                             fake firmware
 #   integration-git-server    git pushing and cloning through the wrapper
 #   integration-<host>        the host's whole config, as it ships (host/)
+#   integration-<host>-all-services-off, -on
+#                             the same, with every service switched off, or
+#                             every one on (all-services.nix)
 { pkgs, hosts }:
 
 let
@@ -13,17 +16,32 @@ let
   scriptTest =
     name: test: args:
     import ../script-test.nix { inherit pkgs; } "integration-${name}" test args;
+  hostTest =
+    check: name: config: cases:
+    import ../nix-harness.nix { inherit pkgs; } "integration-${check}" (
+      import ./host { inherit lib name config; } // cases
+    );
+  allServices = import ./all-services.nix { inherit lib; };
+  states = {
+    off = false;
+    on = true;
+  };
+  allServicesTest =
+    name: host: state: enable:
+    let
+      check = "${name}-all-services-${state}";
+      inherit (host.extendModules { modules = [ (allServices.module enable) ]; }) config;
+    in
+    lib.nameValuePair "integration-${check}" (
+      hostTest check name config (allServices.cases enable config)
+    );
 in
-lib.mapAttrs' (
+lib.concatMapAttrs (
   name: host:
-  lib.nameValuePair "integration-${name}" (
-    import ../nix-harness.nix { inherit pkgs; } "integration-${name}" (
-      import ./host {
-        inherit lib name;
-        inherit (host) config;
-      }
-    )
-  )
+  {
+    "integration-${name}" = hostTest name name host.config { };
+  }
+  // lib.mapAttrs' (allServicesTest name host) states
 ) hosts
 // {
   integration-rollback = scriptTest "rollback" ./rollback.test.sh [ "${../../modules/self-upgrade}" ];
