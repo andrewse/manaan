@@ -46,7 +46,7 @@ in
     enable = lib.mkEnableOption "pulling and applying this repo's release branch";
     repo = lib.mkOption {
       type = lib.types.str;
-      default = "andrewse/machine_configs";
+      default = "andrewse/manaan";
       description = "GitHub owner/repo to pull from.";
     };
     url = lib.mkOption {
