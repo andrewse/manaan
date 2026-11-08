@@ -16,6 +16,7 @@ let
     runtimeInputs = [
       pkgs.git
       pkgs.coreutils
+      pkgs.util-linux
     ];
     vars.repo_dir = cfg.repoDir;
     parts = [ ./wrapper.sh ];
@@ -60,6 +61,10 @@ in
       enable = true;
       config.init.defaultBranch = "main";
     };
+
+    # It has no unit of its own: the wrapper logs each push, pull and refusal
+    # as git-server.
+    machine.serviceCommands.git-server.journal = [ "--identifier=git-server" ];
 
     machine.healthchecks.checks.git-repo-dir = {
       type = "command";

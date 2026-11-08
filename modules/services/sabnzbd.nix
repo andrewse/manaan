@@ -32,5 +32,7 @@ in
     # Its own health endpoint, which needs no API key.
     machine.healthchecks.services.sabnzbd.url =
       "http://127.0.0.1:${toString port}/api?mode=version&output=json";
+
+    machine.serviceCommands.sabnzbd.unit = "sabnzbd.service";
   };
 }

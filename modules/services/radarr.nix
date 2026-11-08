@@ -26,5 +26,7 @@ in
       ];
       startTimeout = 900;
     };
+
+    machine.serviceCommands.radarr.unit = "radarr.service";
   };
 }

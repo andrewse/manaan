@@ -35,6 +35,8 @@ in
         type = "unit";
         target = "prometheus-node-exporter.service";
       };
+
+      machine.serviceCommands.node-exporter.unit = "prometheus-node-exporter.service";
     })
   ];
 }

@@ -53,5 +53,7 @@ in
     # A user of its own each start (DynamicUser); its database is in its
     # StateDirectory, so it writes nothing else.
     machine.sandbox.gatus = { };
+
+    machine.serviceCommands.gatus.unit = "gatus.service";
   };
 }

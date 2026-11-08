@@ -17,5 +17,7 @@ in
       url = "http://127.0.0.1:${toString port}/actuator/health/ping";
       startTimeout = 900;
     };
+
+    machine.serviceCommands.nzbhydra2.unit = "nzbhydra2.service";
   };
 }

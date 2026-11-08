@@ -106,5 +106,11 @@ in
         target = "http://127.0.0.1:${toString port}/api/health";
       };
     };
+
+    machine.serviceCommands.grafana = {
+      unit = "grafana.service";
+      # The module puts Grafana's own `grafana` on PATH.
+      passthrough = lib.getExe' cfg.package "grafana";
+    };
   };
 }

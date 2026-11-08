@@ -24,6 +24,7 @@ machine ◄─ self-upgrade.timer: build release, boot it once, healthcheck,
 | `hosts/<host>/` | Per-machine config, hardware, disk layout, `host_key.pub`, and the host's own services |
 | `modules/system/` | The OS itself, on every host: common settings, users, secrets, the firewall, notifications |
 | `modules/healthchecks/` | The checks that gate every upgrade, declared by each module |
+| `modules/service-commands/` | A command per service, such as `sonarr logs` or `sonarr restart`, declared by each module |
 | `modules/self-upgrade/` | Pulling `release`, booting it once, keeping it or rolling back |
 | `modules/services/` | One file (or directory) per app or service, each set up once the host switches it on |
 | `lib/` | Functions the modules share, such as `mkScript` for their shell scripts |
@@ -49,6 +50,10 @@ declares, under `lib.mkIf cfg.enable`:
   the file system is read-only to it, and it must run as a user of its own,
   not root (`machine.sandbox.<unit>.root` for the exception, with the reason).
   Paths only one host has, such as endor's shares, are that host's to add.
+- its command, `machine.serviceCommands.<name>.unit`, which gives
+  `<name> logs`, `follow`, `errors`, `status`, `start`, `stop` and `restart`.
+  If the service's own package puts a program of that name on PATH, set
+  `passthrough` to it; any other clash fails the build.
 
 A shell script goes beside its module as `<name>.sh`, built with
 `machineLib.mkScript`, with its tests beside it as `<name>.test.sh` (listed in
@@ -72,8 +77,8 @@ stops at `check`, before pushing anything.
 
 | Check | What |
 | --- | --- |
-| `script-upgrade`, `script-verify`, `script-install`, `script-healthcheck` | The self-upgrade, installer and healthcheck scripts against stubbed commands, one case per behaviour (seconds, no VM) |
-| `<host>` | The host in a VM next to a client: healthchecks, SSH, git |
+| `script-upgrade`, `script-verify`, `script-install`, `script-healthcheck`, `script-service-command` | The self-upgrade, installer, healthcheck and service command scripts against stubbed commands, one case per behaviour (seconds, no VM) |
+| `<host>` | The host in a VM next to a client: healthchecks, SSH, git, the service commands |
 | `<host>-installer` | The ISO refuses a used disk, installs onto a blank one, and the host boots from it |
 | `<host>-upgrade` | From an image of the installed host, its ISO still attached: a good release is kept; one failing its healthchecks, and one that can't boot, are rolled back and not retried |
 

@@ -28,5 +28,7 @@ in
       type = "unit";
       target = "cadvisor.service";
     };
+
+    machine.serviceCommands.cadvisor.unit = "cadvisor.service";
   };
 }

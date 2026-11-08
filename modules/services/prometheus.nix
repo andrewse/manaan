@@ -54,5 +54,7 @@ in
         target = "${lib.getExe pkgs.curl} -sf http://${local cfg.port}/api/v1/targets | ${lib.getExe pkgs.jq} -e '.data.activeTargets | length > 0 and all(.health == \"up\")'";
       };
     };
+
+    machine.serviceCommands.prometheus.unit = "prometheus.service";
   };
 }

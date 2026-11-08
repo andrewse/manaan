@@ -30,5 +30,11 @@ in
         "[BODY].status == OK"
       ];
     };
+
+    machine.serviceCommands.syncthing = {
+      unit = "syncthing.service";
+      # The module puts Syncthing's own `syncthing` on PATH.
+      passthrough = lib.getExe' cfg.package "syncthing";
+    };
   };
 }

@@ -1,7 +1,16 @@
 # sshd ForceCommand for the git user: only git transport commands, only on
 # repos inside $repo_dir. Prepended with `repo_dir=...` by default.nix.
 
+# log <priority> <message>: to the journal as git-server, which is what
+# `git-server logs` reads. A push or pull never fails because of it.
+from=${SSH_CONNECTION:-unknown}
+from=${from%% *}
+log() {
+  logger --tag git-server --priority "user.$1" -- "$2 (from $from)" || true
+}
+
 deny() {
+  log warning "refused ${request:-a shell}: ${1:-Access denied}"
   echo "${1:-Access denied}" >&2
   exit 1
 }
@@ -32,6 +41,8 @@ if [[ ! -d $repo ]]; then
   [[ $cmd == git-receive-pack ]] || deny "No such repository: $path"
   mkdir -p "$(dirname "$repo")"
   git init --quiet --bare --shared=group "$repo" >&2
+  log info "created $path"
 fi
 
+log info "$cmd $path"
 exec "$cmd" "$repo"

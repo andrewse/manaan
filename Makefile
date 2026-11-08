@@ -58,8 +58,8 @@ build: ## Build HOST's system
 build-all:
 	@for h in $(HOSTS); do $(MAKE) --no-print-directory build HOST=$$h || exit 1; done
 
-test-scripts: ## Run the self-upgrade, installer and healthcheck scripts against stubs, one case per behaviour (no VM)
-	$(NIX) build -L --no-link $(foreach s,upgrade verify install healthcheck,.#checks.$(SYSTEM).script-$(s))
+test-scripts: ## Run the self-upgrade, installer, healthcheck and service command scripts against stubs, one case per behaviour (no VM)
+	$(NIX) build -L --no-link $(foreach s,upgrade verify install healthcheck service-command,.#checks.$(SYSTEM).script-$(s))
 
 test: ## Boot HOST in VMs: health, network and git tests, install from the ISO, upgrades (needs x86_64 Linux with KVM)
 	$(NIX) build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,.#checks.$(SYSTEM).$(t))
@@ -70,7 +70,7 @@ test-all:
 test-local: export NIX_CONFIG := $(LOCAL_NIX_CONFIG)
 test-local: ## On a Mac, without Nix: HOST's tests on aarch64 in Docker Desktop (give it 16 GB); CI runs them on x86_64
 	$(DOCKER_NIX) sh -c 'git config --global --add safe.directory "*" && \
-		nix build -L --no-link $(foreach s,upgrade verify install healthcheck,$(LOCAL_CHECKS).script-$(s)) && \
+		nix build -L --no-link $(foreach s,upgrade verify install healthcheck service-command,$(LOCAL_CHECKS).script-$(s)) && \
 		nix build -L --no-link $(foreach t,$(HOST) $(HOST)-installer $(HOST)-upgrade,$(LOCAL_CHECKS).$(t))'
 
 vm: ## Interactive VM test driver for HOST
