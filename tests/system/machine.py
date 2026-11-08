@@ -22,7 +22,6 @@ import time
 import urllib.request
 from pathlib import Path
 
-TESTS = Path(__file__).parent
 # Where QEMU forwards the release branch's git daemon, in tests/system/tested.nix.
 GIT_ADDRESS = "10.0.2.100:9418"
 # What firmware descriptors call each machine type, versioned: virt-11.1, pc-q35-11.1.
@@ -152,6 +151,8 @@ class Machine:
             "-netdev", ",".join(["user,id=net", *forwards]),
             "-device", "virtio-net-pci,netdev=net",
             "-device", "virtio-rng-pci",
+            # The admin's public key, which tests/system/tested.nix authorizes.
+            "-smbios", f"type=11,value=io.systemd.credential:tester.ssh={self.public_key()}",
             "-chardev", f"file,id=console,path={self.console_log}",
             "-serial", "chardev:console",
             "-display", "none",
@@ -183,6 +184,9 @@ class Machine:
 
     def __exit__(self, *_):
         self.kill()
+
+    def public_key(self):
+        return Path(f"{self.key}.pub").read_text().strip()
 
     def port(self, guest):
         return self.ports[guest]
@@ -284,6 +288,14 @@ class Machine:
         url = f"http://127.0.0.1:{self.port(guest_port)}{path}"
         with urllib.request.urlopen(url, timeout=timeout) as response:
             return response.read().decode()
+
+
+def keygen(path):
+    """Makes the tests' admin a key at `path`, and `path`.pub; returns `path`."""
+    subprocess.run(
+        ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "tester@system-tests", "-f", path], check=True
+    )
+    return path
 
 
 def installed(image, cache, key, timeout=3600):

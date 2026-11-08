@@ -13,8 +13,26 @@ in
   # No file server: each share is a local directory.
   machine.localShares = true;
 
-  # The tests' way in, as an admin. Only the test image has this key.
-  machine.users.tester = [ (builtins.readFile ./ssh/tester.pub) ];
+  # The tests' way in, as an admin, and as git. Each run makes its own key and
+  # QEMU passes it in as a credential every boot, so no key is in the image.
+  machine.users.tester = [ ];
+  systemd.services.tester-ssh-key = {
+    description = "Authorize the system tests' SSH key";
+    wantedBy = [ "sshd.service" ];
+    before = [ "sshd.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ImportCredential = "tester.ssh";
+    };
+    script = ''
+      key=$(cat "$CREDENTIALS_DIRECTORY/tester.ssh")
+      mkdir -p /run/tester-ssh
+      echo "$key" > /run/tester-ssh/tester
+      echo "restrict $key" > /run/tester-ssh/git
+    '';
+  };
+  services.openssh.authorizedKeysFiles = [ "/run/tester-ssh/%u" ];
 
   # The release branch is the runner's git daemon, standing in for GitHub,
   # which QEMU forwards to this address. Each commit names a system already in

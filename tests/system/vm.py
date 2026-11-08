@@ -9,15 +9,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from machine import TESTS, Image, Machine, installed, overlay
+from machine import Image, Machine, installed, keygen, overlay
 
 
 def main(path):
     image = Image(path)
     workdir = Path(tempfile.mkdtemp(prefix=f"{image.name}-vm-"))
-    key = workdir / "tester"
-    shutil.copyfile(TESTS / "ssh" / "tester", key)
-    key.chmod(0o600)
+    key = keygen(workdir / "tester")
     print(f"installing {image.name} if its image changed...", flush=True)
     disk, vars, _ = installed(image, image.path.parent / "installed", key)
     host = Machine(image, workdir, overlay(disk, workdir / "disk.qcow2"), key, vars=vars, ports=[3000])

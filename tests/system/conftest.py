@@ -1,13 +1,12 @@
 """Fixtures for the system tests: the image under test, the host installed from
 it, and a fresh VM of that host per test module."""
 
-import shutil
 import signal
 import subprocess
 
 import pytest
 
-from machine import TESTS, Image, Machine, installed, overlay
+from machine import Image, Machine, installed, keygen, overlay
 
 
 def pytest_addoption(parser):
@@ -26,11 +25,8 @@ def image(request):
 
 @pytest.fixture(scope="session")
 def key(tmp_path_factory):
-    """The test admin's private key, with the mode ssh insists on."""
-    path = tmp_path_factory.mktemp("ssh") / "tester"
-    shutil.copyfile(TESTS / "ssh" / "tester", path)
-    path.chmod(0o600)
-    return path
+    """The test admin's private key, made for this run."""
+    return keygen(tmp_path_factory.mktemp("ssh") / "tester")
 
 
 @pytest.fixture(scope="session")
