@@ -14,6 +14,7 @@ let
     lib.getAttrs [
       "ProtectSystem"
       "ProtectHome"
+      "PrivateTmp"
       "ReadWritePaths"
     ] (eval config).systemd.services.app.serviceConfig;
   # Only this module's: a config this small fails some of NixOS's own.
@@ -25,25 +26,27 @@ let
   user.systemd.services.app.serviceConfig.User = "app";
 in
 {
-  "a sandboxed service: the file system read-only but for its paths, and no home directories" = {
-    expr = sandboxed (
-      user
-      // {
-        machine.sandbox.app.writes = [
+  "a sandboxed service: the file system read-only but for its paths, no home directories, and a /tmp of its own" =
+    {
+      expr = sandboxed (
+        user
+        // {
+          machine.sandbox.app.writes = [
+            "/var/lib/app"
+            "-/mnt/share"
+          ];
+        }
+      );
+      expected = {
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        ReadWritePaths = [
           "/var/lib/app"
           "-/mnt/share"
         ];
-      }
-    );
-    expected = {
-      ProtectSystem = "strict";
-      ProtectHome = true;
-      ReadWritePaths = [
-        "/var/lib/app"
-        "-/mnt/share"
-      ];
+      };
     };
-  };
 
   "a service whose own module protects less: still strict" = {
     expr =
@@ -63,6 +66,16 @@ in
         systemd.services.app.serviceConfig.ProtectHome = "read-only";
       }).ProtectHome;
     expected = "read-only";
+  };
+
+  "a service that needs the host's /tmp: its module may say so" = {
+    expr =
+      (sandboxed {
+        imports = [ user ];
+        machine.sandbox.app = { };
+        systemd.services.app.serviceConfig.PrivateTmp = false;
+      }).PrivateTmp;
+    expected = false;
   };
 
   "a service with no user of its own: refused" = {

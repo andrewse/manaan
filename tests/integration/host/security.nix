@@ -47,6 +47,16 @@ in
     expected = [ ];
   };
 
+  # nixpkgs' SABnzbd module, for one, makes a temporary file in /tmp at each
+  # start. The sandbox only defaults it, so this also catches a nixpkgs module
+  # switching it off; a service that needs the host's /tmp is listed here, and why.
+  "each sandboxed service gets a /tmp of its own, as the sandbox leaves the host's read-only" = {
+    expr = lib.attrNames (
+      lib.filterAttrs (unit: _: !(services.${unit}.serviceConfig.PrivateTmp or false)) sandbox
+    );
+    expected = [ ];
+  };
+
   "each sandboxed service runs as a user of its own, unless it says why not" = {
     expr = {
       root = lib.attrNames (lib.filterAttrs (unit: _: user unit == "root" && !dynamic unit) confined);
@@ -149,12 +159,6 @@ in
             ++ lib.optional config.services.cadvisor.enable config.services.cadvisor.port
           );
     };
-  };
-}
-// lib.optionalAttrs config.services.sabnzbd.enable {
-  "SABnzbd gets a /tmp of its own, as the sandbox leaves the host's read-only" = {
-    expr = services.sabnzbd.serviceConfig.PrivateTmp or false;
-    expected = true;
   };
 }
 // lib.optionalAttrs grafana.enable {

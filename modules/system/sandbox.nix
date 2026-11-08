@@ -2,7 +2,8 @@
 #   machine.sandbox.sonarr.writes = [ config.services.sonarr.dataDir ];
 # The unit sees the rest of the file system read-only (ProtectSystem=strict)
 # and no home directories, so a compromised service can damage only what it
-# was given. Each also runs as its own user, never root, unless it says why
+# was given. That leaves the host's /tmp read-only too, so each also gets a
+# /tmp of its own (PrivateTmp), which goes when it stops. Each also runs as its own user, never root, unless it says why
 # it can't.
 { config, lib, ... }:
 
@@ -40,6 +41,7 @@ in
       serviceConfig = {
         ProtectSystem = lib.mkForce "strict";
         ProtectHome = lib.mkDefault true;
+        PrivateTmp = lib.mkDefault true;
         ReadWritePaths = unit.writes;
       };
     }) cfg;
