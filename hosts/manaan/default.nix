@@ -3,6 +3,7 @@
     ./hardware.nix
     ./mounts.nix
     ./syncthing.nix
+    ./autostart.nix
   ];
 
   machine.users = import ../../ssh;

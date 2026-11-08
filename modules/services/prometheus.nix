@@ -11,14 +11,19 @@
 let
   cfg = config.services.prometheus;
   local = port: "127.0.0.1:${toString port}";
+  autostart = unit: config.machine.autostart.${unit} or true;
+  # An exporter that isn't started at boot isn't scraped: its target would be
+  # down, and fail prometheus-targets.
   jobs = lib.filter (job: job.enable) [
     {
       name = "node";
-      inherit (cfg.exporters.node) enable port;
+      enable = cfg.exporters.node.enable && autostart "prometheus-node-exporter";
+      inherit (cfg.exporters.node) port;
     }
     {
       name = "cadvisor";
-      inherit (config.services.cadvisor) enable port;
+      enable = config.services.cadvisor.enable && autostart "cadvisor";
+      inherit (config.services.cadvisor) port;
     }
     {
       name = "prometheus";
@@ -29,6 +34,8 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.prometheus = lib.mkDefault false;
+
     services.prometheus = {
       listenAddress = "127.0.0.1";
       port = 9090;
@@ -50,6 +57,7 @@ in
         target = "prometheus.service";
       };
       prometheus-targets = {
+        enable = autostart "prometheus";
         type = "command";
         target = "${lib.getExe pkgs.curl} -sf http://${local cfg.port}/api/v1/targets | ${lib.getExe pkgs.jq} -e '.data.activeTargets | length > 0 and all(.health == \"up\")'";
       };

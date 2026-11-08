@@ -3,7 +3,8 @@
 # They run as healthcheck.service on every boot (gating self-upgrade), as the
 # `healthcheck` command, and inside the VM test in CI. Services with a health
 # endpoint declare it in machine.healthchecks.services (services.nix) instead.
-# Always on, whatever monitoring the host runs: upgrades depend on them.
+# Always on, whatever monitoring the host runs: upgrades depend on them. A unit
+# check is off while its unit doesn't start at boot (machine.autostart).
 {
   config,
   lib,
@@ -54,11 +55,15 @@ in
       default = { };
       description = "Checks that must pass for the machine to count as healthy.";
       type = lib.types.attrsOf (
-        lib.types.submodule {
+        lib.types.submodule (check: {
           options = {
+            # A unit that isn't started at boot would only ever be waited for.
             enable = lib.mkOption {
               type = lib.types.bool;
-              default = true;
+              default =
+                check.config.type != "unit"
+                || config.machine.autostart.${lib.removeSuffix ".service" check.config.target} or true;
+              defaultText = "false for a unit switched off in machine.autostart, otherwise true";
             };
             type = lib.mkOption {
               type = lib.types.enum [
@@ -84,7 +89,7 @@ in
               description = "Seconds after the healthchecks start to keep waiting for this check.";
             };
           };
-        }
+        })
       );
     };
     timeout = lib.mkOption {

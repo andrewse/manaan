@@ -7,6 +7,8 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.cadvisor = lib.mkDefault false;
+
     services.cadvisor = {
       listenAddress = "127.0.0.1";
       port = 9338; # cAdvisor's default 8080 is SABnzbd's.

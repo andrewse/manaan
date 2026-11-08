@@ -5,14 +5,23 @@
 let
   cfg = config.services.syncthing;
   guiPort = 8384;
+  autostart = config.machine.autostart.syncthing;
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.syncthing = lib.mkDefault false;
+
     services.syncthing = {
       guiAddress = "0.0.0.0:${toString guiPort}";
       openDefaultPorts = true;
       overrideDevices = false;
       overrideFolders = false;
+    };
+
+    # Applies the settings above, and would start Syncthing: it runs once
+    # Syncthing is started. guiAddress means the unit is always there.
+    systemd.services.syncthing-init = lib.mkIf (!autostart) {
+      wantedBy = lib.mkForce [ "syncthing.service" ];
     };
 
     machine.firewall.internalTCPPorts = [ guiPort ];

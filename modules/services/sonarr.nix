@@ -9,6 +9,8 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.sonarr = lib.mkDefault false;
+
     services.sonarr.group = "media";
     users.groups.media = { };
 

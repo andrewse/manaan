@@ -11,9 +11,12 @@
 
 let
   cfg = config.virtualisation.docker;
+  autostart = config.machine.autostart.docker;
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.docker = lib.mkDefault false;
+
     virtualisation.docker = {
       # Container logs stay with the container, rotated, rather than in the journal.
       logDriver = "json-file";
@@ -37,7 +40,11 @@ in
     # The docker group is root in all but name; admins have passwordless sudo anyway.
     users.users = lib.mapAttrs (_: _: { extraGroups = [ "docker" ]; }) config.machine.users;
 
+    # The prune timer starts Docker; it waits until Docker starts at boot.
+    systemd.timers.docker-prune = lib.mkIf (!autostart) { wantedBy = lib.mkForce [ ]; };
+
     machine.healthchecks.checks.docker = {
+      enable = autostart;
       type = "command";
       target = "${lib.getExe cfg.package} info";
     };

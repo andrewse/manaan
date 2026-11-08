@@ -33,6 +33,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # It has no unit to hold back, so off it still answers over SSH: what
+    # waits for the host to list it is the healthcheck on repoDir, which on a
+    # network share would fail the boot healthchecks while the share is
+    # missing or down.
+    machine.autostart.git-server = lib.mkDefault false;
+    machine.autostartUnitless = [ "git-server" ];
+
     users.users.git = {
       isSystemUser = true;
       description = "git server";
@@ -67,6 +74,7 @@ in
     machine.serviceCommands.git-server.journal = [ "--identifier=git-server" ];
 
     machine.healthchecks.checks.git-repo-dir = {
+      enable = config.machine.autostart.git-server;
       type = "command";
       target = "test -d ${lib.escapeShellArg cfg.repoDir}";
     };

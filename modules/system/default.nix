@@ -7,5 +7,6 @@
     ./firewall.nix
     ./sandbox.nix
     ./notify.nix
+    ./autostart.nix
   ];
 }

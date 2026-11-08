@@ -55,6 +55,18 @@ declares, under `lib.mkIf cfg.enable`:
   If the service's own package puts a program of that name on PATH, set
   `passthrough` to it; any other clash fails the build.
 
+A switched-on service is installed but not started at boot until the host's
+`hosts/<host>/autostart.nix` lists its systemd unit: `machine.autostart.sonarr
+= true;`. Until then it can be tried with `systemctl start sonarr` without
+failing the boot healthchecks, and its healthchecks and Gatus alerts are left
+out. The file sets its own unit to `machine.autostart.<unit> = lib.mkDefault
+false;`, and one whose service brings companion units (an init unit, a timer,
+a login) or a `command` healthcheck reads `config.machine.autostart.<unit>` to
+switch those off with it; `unit` healthchecks follow it on their own. A
+service with no unit of its own also adds its name to
+`machine.autostartUnitless`, and decides itself what being off means: the git
+server still answers over SSH, without its healthcheck.
+
 A shell script goes beside its module as `<name>.sh`, built with
 `machineLib.mkScript`, with its tests beside it as `<name>.test.sh` (listed in
 `tests/scripts.nix`). Something only one host runs goes in `hosts/<host>/`

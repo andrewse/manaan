@@ -8,6 +8,8 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.nzbhydra2 = lib.mkDefault false;
+
     machine.firewall.internalTCPPorts = [ port ];
     machine.sandbox.nzbhydra2.writes = [ cfg.dataDir ];
 

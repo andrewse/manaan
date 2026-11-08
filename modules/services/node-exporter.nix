@@ -25,6 +25,8 @@ in
     }
 
     (lib.mkIf cfg.enable {
+      machine.autostart.prometheus-node-exporter = lib.mkDefault false;
+
       # The module hides /home from the exporter, which then reports the space of
       # the empty directory put over it rather than of the /home volume.
       systemd.services.prometheus-node-exporter.serviceConfig.ProtectHome = lib.mkForce "read-only";

@@ -9,6 +9,8 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.sabnzbd = lib.mkDefault false;
+
     services.sabnzbd = {
       group = "media";
       # The settings here are merged over sabnzbd.ini at each start.

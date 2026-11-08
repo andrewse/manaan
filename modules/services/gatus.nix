@@ -9,9 +9,13 @@ let
   ntfy = config.machine.notify.environmentFile;
   port = 8090;
   alerts = lib.optional (ntfy != null) { type = "ntfy"; };
+  # A service that isn't started at boot would only ever be alerted on.
+  started = lib.filterAttrs (unit: _: config.machine.autostart.${unit} or true) health.services;
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.gatus = lib.mkDefault false;
+
     services.gatus = {
       environmentFile = ntfy;
       settings = {
@@ -37,7 +41,7 @@ in
           inherit (service) url conditions;
           group = config.networking.hostName;
           interval = "1m";
-        }) (removeAttrs health.services [ "gatus" ]);
+        }) (removeAttrs started [ "gatus" ]);
       };
     };
 

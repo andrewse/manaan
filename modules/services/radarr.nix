@@ -9,6 +9,8 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.radarr = lib.mkDefault false;
+
     services.radarr.group = "media";
     users.groups.media = { };
 

@@ -39,6 +39,8 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    machine.autostart.grafana = lib.mkDefault false;
+
     assertions = [
       {
         assertion = prometheus.enable;
@@ -102,6 +104,7 @@ in
         target = "grafana.service";
       };
       grafana-http = {
+        enable = config.machine.autostart.grafana;
         type = "http";
         target = "http://127.0.0.1:${toString port}/api/health";
       };
