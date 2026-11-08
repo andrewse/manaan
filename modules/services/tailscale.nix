@@ -7,12 +7,13 @@
 
 let
   cfg = config.services.tailscale;
+  authKeyFile = config.machine.secrets.paths.tailscale-authkey or null;
 in
 {
   services.tailscale = {
     enable = lib.mkDefault true;
     # Only needed for the first login; the node identity then lives in /var/lib/tailscale.
-    authKeyFile = config.machine.secrets.paths.tailscale-authkey or null;
+    inherit authKeyFile;
     disableUpstreamLogging = true;
     openFirewall = true;
   };
@@ -30,7 +31,9 @@ in
       type = "unit";
       target = "tailscaled.service";
     };
-    tailscale-up = {
+    # Logged in only once there is a key to log in with (`make secret
+    # NAME=tailscale-authkey`); until then, failing would roll back every upgrade.
+    tailscale-up = lib.mkIf (authKeyFile != null) {
       type = "command";
       target = "${lib.getExe cfg.package} status --json | ${lib.getExe pkgs.jq} -e '.BackendState == \"Running\"'";
     };

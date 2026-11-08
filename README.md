@@ -185,7 +185,7 @@ For a TrueNAS VM:
    Syncthing keys, the SMB login) on the next upgrade. Until then it is reachable only over SSH on the LAN.
 
 Secrets are created with `make secret NAME=tailscale-authkey` (a reusable,
-pre-approved key) and `make secret NAME=root-password` (output of
+pre-approved key; until it exists, Tailscale isn't logged in or healthchecked) and `make secret NAME=root-password` (output of
 `mkpasswd -m yescrypt`). `secrets/syncthing-key.age` and `syncthing-https-key.age` hold
 the old host's Syncthing `key.pem` and `https-key.pem`. `make secret NAME=smb-credentials`
 takes the `username=`/`password=` lines for endor's SMB shares; until it exists those two
