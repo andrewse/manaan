@@ -25,6 +25,9 @@ in
     key = lib.mkIf useKeys secrets.syncthing-key;
   };
 
+  # Every folder in its config.xml is on endor's syncthing share.
+  machine.sandbox = lib.mkIf cfg.enable { syncthing.writes = [ "/mnt/endor/syncthing" ]; };
+
   machine.secrets.use = [
     "syncthing-key"
     "syncthing-https-key"

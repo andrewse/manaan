@@ -13,6 +13,8 @@ in
     users.groups.media = { };
 
     machine.firewall.internalTCPPorts = [ port ];
+    # Its libraries and downloads are the host's to add.
+    machine.sandbox.sonarr.writes = [ cfg.dataDir ];
 
     # Its own health endpoint, which needs no API key. It migrates its database
     # on the first start after an upgrade: give it longer to come up.

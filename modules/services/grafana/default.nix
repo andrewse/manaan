@@ -94,6 +94,7 @@ in
     '';
 
     machine.firewall.internalTCPPorts = [ port ];
+    machine.sandbox.grafana.writes = [ cfg.dataDir ];
 
     machine.healthchecks.checks = {
       grafana = {

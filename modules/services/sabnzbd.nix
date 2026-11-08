@@ -26,6 +26,8 @@ in
     nixpkgs.config.allowUnfreePredicate = pkg: lib.getName pkg == "unrar";
 
     machine.firewall.internalTCPPorts = [ port ];
+    # Its downloads are the host's to add.
+    machine.sandbox.sabnzbd.writes = [ "/var/lib/${cfg.stateDir}" ];
 
     # Its own health endpoint, which needs no API key.
     machine.healthchecks.services.sabnzbd.url =

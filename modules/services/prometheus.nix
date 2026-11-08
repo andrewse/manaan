@@ -42,6 +42,8 @@ in
       }) jobs;
     };
 
+    machine.sandbox.prometheus.writes = [ "/var/lib/${cfg.stateDir}" ];
+
     machine.healthchecks.checks = {
       prometheus = {
         type = "unit";

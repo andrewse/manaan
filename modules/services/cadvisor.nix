@@ -19,6 +19,11 @@ in
       ];
     };
 
+    # Root, to read every container's cgroup and Docker's own state. A user of
+    # its own would need the docker group, which is root in all but name, so
+    # it would gain nothing; it can still write nothing.
+    machine.sandbox.cadvisor.root = true;
+
     machine.healthchecks.checks.cadvisor = {
       type = "unit";
       target = "cadvisor.service";

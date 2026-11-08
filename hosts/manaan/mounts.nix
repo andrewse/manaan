@@ -50,4 +50,24 @@ in
   };
 
   machine.secrets.use = [ "smb-credentials" ];
+
+  # Which service may write which share; `-` because the SMB shares are only
+  # there once their secret is. Syncthing's is in syncthing.nix.
+  machine.sandbox = lib.mkMerge [
+    (lib.mkIf config.services.sonarr.enable {
+      sonarr.writes = [
+        "/mnt/endor/series"
+        "-/mnt/endor/downloads"
+      ];
+    })
+    (lib.mkIf config.services.radarr.enable {
+      radarr.writes = [
+        "/mnt/endor/movies"
+        "-/mnt/endor/downloads"
+      ];
+    })
+    (lib.mkIf config.services.sabnzbd.enable {
+      sabnzbd.writes = [ "-/mnt/endor/downloads" ];
+    })
+  ];
 }

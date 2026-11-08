@@ -28,6 +28,8 @@ in
       # The module hides /home from the exporter, which then reports the space of
       # the empty directory put over it rather than of the /home volume.
       systemd.services.prometheus-node-exporter.serviceConfig.ProtectHome = lib.mkForce "read-only";
+      # It only reads; its RuntimeDirectory is all it writes.
+      machine.sandbox.prometheus-node-exporter = { };
 
       machine.healthchecks.checks.prometheus-node-exporter = {
         type = "unit";

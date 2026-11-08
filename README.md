@@ -44,7 +44,11 @@ declares, under `lib.mkIf cfg.enable`:
 - its ports, in `machine.firewall.internalTCPPorts` (private networks and Tailscale only);
 - its health: `machine.healthchecks.services.<unit>.url` for a long-running
   service with a health endpoint, `machine.healthchecks.checks` for anything else;
-- its secrets, by name in `machine.secrets.use`, read from `machine.secrets.paths`.
+- its secrets, by name in `machine.secrets.use`, read from `machine.secrets.paths`;
+- the only paths it may write, in `machine.sandbox.<unit>.writes`: the rest of
+  the file system is read-only to it, and it must run as a user of its own,
+  not root (`machine.sandbox.<unit>.root` for the exception, with the reason).
+  Paths only one host has, such as endor's shares, are that host's to add.
 
 A shell script goes beside its module as `<name>.sh`, built with
 `machineLib.mkScript`, with its tests beside it as `<name>.test.sh` (listed in
