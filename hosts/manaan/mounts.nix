@@ -41,6 +41,7 @@ in
     "/mnt/endor/audio" = nfs "media/audio";
     "/mnt/endor/library" = nfs "media/library";
     "/mnt/endor/paperless" = nfs "documents/paperless";
+    "/mnt/endor/repos" = nfs "repos";
   }
   # `username=` and `password=` lines (`make secret NAME=smb-credentials`).
   // lib.optionalAttrs (secrets ? smb-credentials) {

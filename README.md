@@ -117,7 +117,7 @@ Data is not covered by rollback. Snapshot the zvol from TrueNAS.
 
 | Service | Where | Port |
 | --- | --- | --- |
-| SSH, git server | `modules/services/ssh.nix`, `modules/services/git-server/` | 22 |
+| SSH, git server, its repos on endor at `/mnt/endor/repos` | `modules/services/ssh.nix`, `modules/services/git-server/` | 22 |
 | Docker, for compose projects run by hand | `modules/services/docker.nix` | whatever they publish |
 | Syncthing, with the old host's device identity | `modules/services/syncthing.nix`, `hosts/manaan/syncthing.nix` | 8384 (web UI), 22000, 21027/udp |
 | NZBHydra2, Sonarr, Radarr, SABnzbd | `modules/services/{nzbhydra2,sonarr,radarr,sabnzbd}.nix` | 5076, 8989, 7878, 8080 |

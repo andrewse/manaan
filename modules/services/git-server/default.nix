@@ -36,7 +36,10 @@ in
       isSystemUser = true;
       description = "git server";
       group = "git";
-      home = cfg.repoDir;
+      # Local even when repoDir is a network share, so activation neither
+      # waits on the share nor chowns it. A repoDir elsewhere must already
+      # exist, writable by git.
+      home = "/var/lib/git";
       createHome = true;
       homeMode = "750";
       # sshd runs the ForceCommand through the login shell.

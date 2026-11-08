@@ -6,7 +6,14 @@
   ];
 
   machine.users = import ../../ssh;
-  machine.gitServer.enable = true;
+  machine.gitServer = {
+    enable = true;
+    # endor's NFS share (mounts.nix).
+    repoDir = "/mnt/endor/repos";
+  };
+  # The IDs that own the repos share on endor.
+  users.users.git.uid = 3007;
+  users.groups.git.gid = 3010;
   machine.selfUpgrade.enable = true;
 
   # Each set up in modules/services/.
