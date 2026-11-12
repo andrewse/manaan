@@ -3,7 +3,8 @@
 # a release and asks for a reboot, and verify.sh decides at the next boot. The
 # firmware and boot loader are faked, so that what each boot starts follows
 # from what the scripts told bootctl and switch-to-configuration; the releases
-# are fake systems that come up healthy, come up unhealthy, or panic.
+# are fake systems that come up healthy, come up unhealthy, or panic. Each
+# release gets 3 attempts.
 # tests/system/test_upgrade.py tells the same story in a VM, against the real
 # firmware.
 #
@@ -75,7 +76,7 @@ boot() {
   ln -sfn "$system" "$root/run/current-system"
   if [[ -e $system/unhealthy ]]; then rm -f "$root/healthy"; else touch "$root/healthy"; fi
   : >"$root/calls"
-  run "" "$scripts/lib.sh" "$scripts/verify.sh"
+  run "attempts=3" "$scripts/lib.sh" "$scripts/verify.sh"
 }
 
 # As in upgrade.test.sh, the release branch is a local repo whose commits name
@@ -93,7 +94,7 @@ EOF
 )
 upgrade() {
   : >"$root/calls"
-  run "url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers")"$'\n'"$build" \
+  run "attempts=3 url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers")"$'\n'"$build" \
     "$scripts/lib.sh" "$scripts/upgrade.sh"
 }
 
@@ -125,8 +126,11 @@ expect_kept() {
   expect_missing state/pending
 }
 
-expect_bad() {
-  grep -qxF "$1" "$root/state/bad-revs" || fail "$1 is not in bad-revs"
+# expect_failures <rev> <n>: <rev> has failed <n> attempts.
+expect_failures() {
+  local n
+  n=$(grep -cxF "$1" "$root/state/bad-revs" || true)
+  [[ $n == "$2" ]] || fail "$1 failed $n attempts, expected $2"
 }
 
 begin "a good release: booted once on trial, confirmed, and kept across a reboot"
@@ -145,7 +149,7 @@ boot
 expect_boots installed good good
 expect_kept good "$good"
 
-carry_on "a release that fails its healthchecks: rolled back, rebooted onto the kept release, and marked bad"
+carry_on "a release that fails its healthchecks: rolled back, rebooted onto the kept release, and its attempt recorded"
 : >"$root/boots"
 failing=$(publish "$(release failing unhealthy)")
 upgrade
@@ -157,7 +161,7 @@ boot
 expect_status 0
 expect_boots failing good
 expect_kept good "$good"
-expect_bad "$failing"
+expect_failures "$failing" 1
 
 carry_on "a release that cannot boot: the firmware falls back to the kept release, which rolls it back"
 : >"$root/boots"
@@ -169,22 +173,53 @@ expect_output "upgrade to $unbootable never finished booting"
 expect_not_called "systemctl reboot"
 expect_boots unbootable good
 expect_kept good "$good"
-expect_bad "$unbootable"
+expect_failures "$unbootable" 1
 
-carry_on "a release that failed is not tried again"
+carry_on "a release that failed is tried again on later runs, until it has failed 3 times"
+: >"$root/boots"
+for attempt in 2 3; do
+  upgrade
+  expect_output "trying $unbootable again (attempt $attempt of 3)"
+  expect_called "systemctl reboot"
+  boot
+  expect_output "upgrade to $unbootable never finished booting"
+done
+expect_output "$unbootable failed 3 times"
+expect_boots unbootable good unbootable good
+expect_kept good "$good"
+expect_failures "$unbootable" 3
+
+carry_on "a release that failed 3 times is not tried again"
 upgrade
 expect_status 0
-expect_output "$unbootable failed before"
+expect_output "$unbootable failed 3 times; waiting for a newer release"
 expect_not_called nix-env
 expect_not_called bootctl
 expect_not_called "systemctl reboot"
 expect_missing state/pending
 
+carry_on "a good release that failed through an outage: tried again once it is over, and kept"
+: >"$root/boots"
+flaky_system=$(release flaky unhealthy)
+flaky=$(publish "$flaky_system")
+upgrade
+boot
+expect_output "upgrade to $flaky failed its healthchecks"
+boot
+expect_kept good "$good"
+rm "$flaky_system/unhealthy"
+upgrade
+expect_output "trying $flaky again (attempt 2 of 3)"
+boot
+expect_output "upgrade to $flaky confirmed"
+expect_boots flaky good flaky
+expect_kept flaky "$flaky"
+
 carry_on "after the failed upgrades, the kept release keeps booting"
 : >"$root/boots"
 boot
 boot
-expect_boots good good
-expect_kept good "$good"
+expect_boots flaky flaky
+expect_kept flaky "$flaky"
 
 finish

@@ -23,8 +23,9 @@ build_system() {
 }
 EOF
 )
+# upgrade [attempts]: runs upgrade.sh, giving a release 3 attempts unless told otherwise.
 upgrade() {
-  run "url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers")"$'\n'"$build" \
+  run "attempts=${1:-3} url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers")"$'\n'"$build" \
     "$scripts/lib.sh" "$scripts/upgrade.sh"
 }
 
@@ -127,20 +128,62 @@ expect_refused "$rev"
 expect_output "does not descend from the deployed $deployed"
 expect_profile "$new"
 
-begin "a release that failed before: not tried again"
+# failed <rev> <n>: <rev> has failed <n> attempts, among other releases' failures.
+failed() {
+  echo 0000000000000000000000000000000000000000 >>"$root/state/bad-revs"
+  for ((i = 0; i < $2; i++)); do echo "$1" >>"$root/state/bad-revs"; done
+}
+
+for n in 1 2; do
+  begin "a release that failed $n of 3 attempts: tried again"
+  old=$(system old) new=$(system new)
+  installed "$old"
+  rev=$(publish "$new")
+  failed "$rev" "$n"
+  upgrade
+  expect_status 0
+  expect_output "trying $rev again (attempt $((n + 1)) of 3)"
+  expect_file state/pending "$rev $new $old"
+  expect_called "bootctl set-oneshot nixos-generation-2.conf"
+  expect_called "systemctl reboot"
+done
+
+begin "a release that failed 3 attempts: not tried again"
 old=$(system old) new=$(system new)
 installed "$old"
 rev=$(publish "$new")
-echo "$rev" >"$root/state/bad-revs"
+failed "$rev" 3
 upgrade
 expect_status 0
-expect_output "failed before"
+expect_output "$rev failed 3 times"
 expect_not_called build
 expect_not_called nix-env
 expect_not_called bootctl
 expect_not_called "systemctl reboot"
 expect_missing state/pending
 expect_profile "$old"
+
+begin "a release that failed once, with 1 attempt allowed: not tried again"
+old=$(system old) new=$(system new)
+installed "$old"
+rev=$(publish "$new")
+failed "$rev" 1
+upgrade 1
+expect_status 0
+expect_output "$rev failed 1 times"
+expect_not_called build
+expect_missing state/pending
+
+begin "a release that failed 3 times, with 5 attempts allowed: tried again"
+old=$(system old) new=$(system new)
+installed "$old"
+rev=$(publish "$new")
+failed "$rev" 3
+upgrade 5
+expect_status 0
+expect_output "trying $rev again (attempt 4 of 5)"
+expect_file state/pending "$rev $new $old"
+expect_called "systemctl reboot"
 
 begin "staging the release fails: the running system stays the default, no reboot"
 old=$(system old) new=$(system new "exit 1")
@@ -149,6 +192,7 @@ rev=$(publish "$new")
 upgrade
 expect_failure
 expect_output "restoring the running system"
+expect_output "$rev failed attempt 1 of 3; it will be tried again"
 expect_file state/bad-revs "$rev"
 expect_missing state/pending
 expect_profile "$old"

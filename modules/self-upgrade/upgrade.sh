@@ -18,9 +18,13 @@ if [[ $rev == "$deployed" ]]; then
   echo "already at $rev"
   exit 0
 fi
-if grep -qxF "$rev" "$state/bad-revs"; then
-  echo "$rev failed before; waiting for a newer release"
+failed=$(failures "$rev")
+if ((failed >= attempts)); then
+  echo "$rev failed $failed times; waiting for a newer release"
   exit 0
+fi
+if ((failed)); then
+  echo "trying $rev again (attempt $((failed + 1)) of $attempts)"
 fi
 
 # A refused commit is not a failed trial: it is never built, nor marked bad,

@@ -2,7 +2,8 @@
 keep a good release, and roll back a release that fails its healthchecks or
 cannot boot -- what the real firmware and boot loader do with the entries
 self-upgrade sets. integration-rollback tells the same story against a fake
-firmware, and also that a failed release is not tried again.
+firmware, and also that a failed release is tried again, up to three times,
+before it is skipped.
 
 The installer ISO stays attached throughout, as on TrueNAS, and it installs
 the system the disk starts from, so every release moves the disk past it.

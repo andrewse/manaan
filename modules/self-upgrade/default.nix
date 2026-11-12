@@ -7,12 +7,14 @@
 #                           system stays default), reboot
 #   boot                 -> healthcheck.service -> self-upgrade-verify.service:
 #                           pass: make the new system the default
-#                           fail, or the new system never came up: roll back, remember
-#                           the commit as bad, and skip it until the branch moves
+#                           fail, or the new system never came up: roll back and
+#                           record the failed attempt; a later run tries the commit
+#                           again, until it has failed `attempts` times, and then
+#                           skips it until the branch moves
 #
-# State lives in /var/lib/self-upgrade: `rev` (deployed commit), `bad-revs`,
-# `pending` (while an upgrade is on trial), and `repo`, the bare clone of the
-# branch that commits are verified and built from.
+# State lives in /var/lib/self-upgrade: `rev` (deployed commit), `bad-revs` (one
+# line per failed attempt), `pending` (while an upgrade is on trial), and `repo`,
+# the bare clone of the branch that commits are verified and built from.
 {
   config,
   lib,
@@ -51,6 +53,7 @@ let
       vars = {
         state = stateDir;
         profile = "/nix/var/nix/profiles/system";
+        inherit (cfg) attempts;
       }
       // vars;
       parts = [ ./lib.sh ] ++ parts;
@@ -105,6 +108,16 @@ in
       type = lib.types.str;
       default = "*:0/30";
       description = "systemd OnCalendar expression for checking for a new release.";
+    };
+    attempts = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 3;
+      description = ''
+        Trial boots a release gets before it is skipped until the branch moves.
+        A failed trial is tried again on a later run, so that one transient
+        outage (the file server down, the network blipping) does not rule out a
+        good release.
+      '';
     };
   };
 

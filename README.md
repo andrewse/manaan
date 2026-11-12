@@ -193,8 +193,10 @@ default, and rebooted into. On that boot:
 - the new system panics or fails in early boot: the kernel reboots
   (`panic=10`, `boot.panic_on_fail`) into the default, which is still the old system.
 
-Failed commits are recorded in `/var/lib/self-upgrade/bad-revs` and skipped until
-`release` moves; refused ones were never tried, so are not recorded there. A system
+Each failed attempt is recorded in `/var/lib/self-upgrade/bad-revs`. A failed commit
+is tried again on later runs, so a transient outage doesn't rule out a good release,
+and once it has failed three times (`machine.selfUpgrade.attempts`) it is skipped until
+`release` moves. Refused commits were never tried, so are not recorded there. A system
 that has already been confirmed is never rolled back further, so a failure unrelated
 to an upgrade won't cause a reboot loop.
 `make status HOST=manaan` shows the state.
