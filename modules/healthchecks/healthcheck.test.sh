@@ -56,4 +56,13 @@ expect_output "FAIL second (unit second.service): not ready, and not waited for 
 expect_output "2 check(s) failed"
 expect_not_called sleep
 
+begin "a command that hangs: killed after its few seconds, and reported"
+# The real timeout, given one second rather than ten. Were the probe to wait
+# on the command, it would pass once the sleep ended, half a minute on.
+stub "$root/bin/timeout" timeout "exec $(printf %q "$(command -v timeout)") --kill-after=1 1 \"\${@:3}\""
+healthcheck "check hung command 'sleep 30' 0"
+expect_failure
+expect_output "FAIL hung (command sleep 30): still starting after 0s"
+expect_called "timeout --kill-after=2 10 bash -c sleep\\ 30"
+
 finish

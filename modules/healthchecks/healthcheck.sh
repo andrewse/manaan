@@ -9,7 +9,11 @@ failed=0
 
 # probe <type> <target>: exits 0 if healthy, 1 if starting, 2 if unhealthy.
 # Only a unit can tell starting from unhealthy; other probes can't, so a probe
-# that doesn't pass yet counts as starting.
+# that doesn't pass yet counts as starting. Each is given a few seconds, so one
+# that hangs -- on a network share whose server has gone, say -- is retried
+# until its deadline like any other, rather than holding up the healthchecks
+# until systemd kills them with nothing reported. A command is killed outright
+# if the TERM doesn't do it, as a wait on NFS ignores all but KILL.
 probe() {
   local type=$1 target=$2
   case $type in
@@ -22,7 +26,7 @@ probe() {
         *) return 1 ;; # activating, or not started yet
       esac
       ;;
-    command) bash -c "$target" || return 1 ;;
+    command) timeout --kill-after=2 10 bash -c "$target" || return 1 ;;
   esac
 }
 

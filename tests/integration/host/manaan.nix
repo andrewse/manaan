@@ -59,6 +59,8 @@ let
     ]
   ];
   shares = lib.filterAttrs (mount: _: lib.hasPrefix "/mnt/endor/" mount) fs;
+  git = config.machine.gitServer;
+  inherit (config.machine.healthchecks) checks;
 in
 {
   "each mount is its own volume, with its mount options" = {
@@ -80,6 +82,15 @@ in
         _: share: !(lib.elem "x-systemd.automount" share.options && lib.elem "nofail" share.options)
       ) shares
     );
+    expected = [ ];
+  };
+
+  # A stat of an automount point finds the directory it sits on, mounted or
+  # not; only a path inside it mounts it, or fails when it can't.
+  "the git server's healthcheck looks into the repos share, not at its automount" = {
+    expr = lib.optional (
+      git.enable && !lib.hasInfix "${git.repoDir}/" checks.git-repo-dir.target
+    ) checks.git-repo-dir.target;
     expected = [ ];
   };
 

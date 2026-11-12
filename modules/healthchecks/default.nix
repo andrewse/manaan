@@ -78,7 +78,9 @@ in
                 unit: target is a systemd unit and must be active. While it is
                   activating (starting) it is waited for; once failed
                   (unhealthy) it fails at once. See machine.healthchecks.services.
-                command: target is a shell command and must exit 0.
+                command: target is a shell command and must exit 0 within
+                  10 seconds. One that takes longer is killed and retried,
+                  as one that exits non-zero is, until the check's timeout.
               '';
             };
             target = lib.mkOption { type = lib.types.str; };

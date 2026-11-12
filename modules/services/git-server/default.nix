@@ -73,10 +73,15 @@ in
     # as git-server.
     machine.serviceCommands.git-server.journal = [ "--identifier=git-server" ];
 
+    # Through repoDir rather than at it: when repoDir is an automount point,
+    # as a network share mounted on first use is, a stat of the point itself
+    # neither mounts it nor fails, and so finds the empty directory the
+    # automount sits on whether or not the share is there. A path inside it
+    # has to be mounted to resolve, so it fails while the share can't be.
     machine.healthchecks.checks.git-repo-dir = {
       enable = config.machine.autostart.git-server;
       type = "command";
-      target = "test -d ${lib.escapeShellArg cfg.repoDir}";
+      target = "test -d ${lib.escapeShellArg "${cfg.repoDir}/."}";
     };
   };
 }
