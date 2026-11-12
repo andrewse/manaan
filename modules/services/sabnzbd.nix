@@ -1,6 +1,7 @@
 # SABnzbd: downloads the releases Sonarr and Radarr pick, in the `media` group
 # they share. Servers, categories and logins are set in its web UI; that state
-# lives under /var/lib.
+# lives under /var/lib. It gets a login the first time it
+# has none (modules/admin-login/).
 { config, lib, ... }:
 
 let

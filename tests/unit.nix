@@ -13,9 +13,12 @@
 
 let
   inherit (pkgs) lib;
+  scriptTestWith =
+    name: dir: file: args:
+    import ./script-test.nix { inherit pkgs; } "unit-${name}" "${dir}/${file}" args;
   scriptTest =
     name: dir: file:
-    import ./script-test.nix { inherit pkgs; } "unit-${name}" "${dir}/${file}" [ ];
+    scriptTestWith name dir file [ ];
   moduleTest =
     name: file:
     import ./nix-harness.nix { inherit pkgs; } "unit-${name}" (
@@ -31,10 +34,22 @@ in
     scriptTest "service-command" ../modules/service-commands
       "service-command.test.sh";
   unit-git-server = scriptTest "git-server" ../modules/services/git-server "wrapper.test.sh";
+  # The real tools the scripts use, and the base config NZBHydra2 starts from.
+  unit-admin-login-scripts =
+    scriptTestWith "admin-login-scripts" ../modules/admin-login "admin-login.test.sh"
+      [
+        (lib.makeBinPath [
+          pkgs.jq
+          pkgs.yq-go
+          pkgs.mkpasswd
+        ])
+        "${pkgs.nzbhydra2.src}/core/src/main/resources/config/baseConfig.yml"
+      ];
 
   unit-firewall = moduleTest "firewall" ../modules/system/firewall.test.nix;
   unit-sandbox = moduleTest "sandbox" ../modules/system/sandbox.test.nix;
   unit-healthchecks = moduleTest "healthchecks" ../modules/healthchecks/healthchecks.test.nix;
   unit-service-commands = moduleTest "service-commands" ../modules/service-commands/service-commands.test.nix;
   unit-self-upgrade = moduleTest "self-upgrade" ../modules/self-upgrade/self-upgrade.test.nix;
+  unit-admin-login = moduleTest "admin-login" ../modules/admin-login/admin-login.test.nix;
 }

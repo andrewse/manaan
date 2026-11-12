@@ -5,5 +5,6 @@
     ./service-commands
     ./self-upgrade
     ./services
+    ./admin-login
   ];
 }

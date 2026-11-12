@@ -1,5 +1,6 @@
 # Syncthing. Folders and devices are managed in the web UI and live in
-# config.xml in its config dir, not here.
+# config.xml in its config dir, not here. Its GUI gets a login
+# the first time it has none (modules/admin-login/).
 { config, lib, ... }:
 
 let

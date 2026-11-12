@@ -1,5 +1,6 @@
 # NZBHydra2: searches Usenet indexers for Sonarr and Radarr. It is configured
-# in its web UI; that state lives under /var/lib.
+# in its web UI; that state lives under /var/lib. It gets a login
+# the first time it has none (modules/admin-login/).
 { config, lib, ... }:
 
 let

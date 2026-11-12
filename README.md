@@ -29,6 +29,7 @@ machine ◄─ self-upgrade.timer: fetch release, refuse it unless signed by a k
 | `modules/healthchecks/` | The checks that gate every upgrade, declared by each module |
 | `modules/service-commands/` | A command per service, such as `sonarr logs` or `sonarr restart`, declared by each module |
 | `modules/self-upgrade/` | Pulling `release`, booting it once, keeping it or rolling back |
+| `modules/admin-login/` | The admin login Syncthing, SABnzbd and NZBHydra2 are given the first time they have none |
 | `modules/services/` | One file (or directory) per app or service, each set up once the host switches it on |
 | `lib/` | Functions the modules share, such as `mkScript` for their shell scripts |
 | `secrets/` | agenix-encrypted secrets and who can decrypt them |
@@ -228,6 +229,14 @@ provisioned from `modules/services/grafana/dashboard/`; edits made in the web UI
 stick. Log in as `admin` with the password generated on first start
 (`sudo cat /var/lib/grafana/admin-password`). Prometheus keeps 90 days or 16GB,
 whichever is less, on a volume of its own.
+
+Syncthing's, SABnzbd's and NZBHydra2's web UIs get a login the first time they start
+without one: `admin`, with a random password, kept as a systemd credential only root can
+read: `sudo cat /etc/credstore/<syncthing|sabnzbd|nzbhydra2>-admin` (`modules/admin-login/`).
+One that has a login, from then on or set in its web UI first, is left alone, so a login
+changed in the web UI sticks, and the file then no longer holds it. The file is only made
+for a login set this way; if the service's state is lost, the next start sets the one in
+the file again.
 
 ## Disk layout
 
