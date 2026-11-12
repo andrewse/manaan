@@ -60,6 +60,8 @@ let
     };
 in
 {
+  imports = [ ./watchdog.nix ];
+
   options.machine.selfUpgrade = {
     enable = lib.mkEnableOption "pulling and applying this repo's release branch";
     url = lib.mkOption {
@@ -136,6 +138,9 @@ in
     # Make every failure to boot end in a reboot, which lands on the old system:
     # a stage-1 failure panics instead of opening a shell, a panic reboots, and
     # stage 2 carries on past failed mounts so the healthchecks can catch it.
+    # A boot that hangs instead is rebooted by a watchdog or, if it is a trial
+    # boot still undecided at machine.selfUpgrade.trialDeadline, by
+    # self-upgrade-deadline (watchdog.nix).
     boot.kernelParams = [
       "boot.panic_on_fail"
       "panic=10"

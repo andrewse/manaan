@@ -193,6 +193,11 @@ default, and rebooted into. On that boot:
 - healthchecks fail: roll back to the previous system and reboot.
 - the new system panics or fails in early boot: the kernel reboots
   (`panic=10`, `boot.panic_on_fail`) into the default, which is still the old system.
+- the new system hangs: a soft lockup panics (`softlockup_panic=1`), a hung
+  kernel or PID 1 is rebooted by the watchdog (`softdog`, pinged by systemd), and
+  anything else still undecided at the trial deadline (the longest the
+  healthchecks may take, plus ten minutes) is rebooted by `self-upgrade-deadline`.
+  Each lands on the old system, which rolls the upgrade back.
 
 Each failed attempt is recorded in `/var/lib/self-upgrade/bad-revs`. A failed commit
 is tried again on later runs, so a transient outage doesn't rule out a good release,

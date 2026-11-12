@@ -27,8 +27,8 @@ case $1 in
 esac'
 }
 
-# release <name> [unhealthy|panics]: a fake system that comes up healthy when
-# booted, unless it is marked otherwise. Prints its path.
+# release <name> [unhealthy|panics|hangs]: a fake system that comes up healthy
+# when booted, unless it is marked otherwise. Prints its path.
 release() {
   local path
   path=$(system "$1" '
@@ -50,7 +50,9 @@ fresh_install() {
 # boot: the firmware boots the one-shot entry if there is one, clearing it,
 # then its default, then the boot loader's. A system that panics reboots at
 # once. One that comes up runs verify, as self-upgrade-verify.service does once
-# the healthchecks are done. Each boot's system is logged to $root/boots.
+# the healthchecks are done; one that hangs never gets that far, and runs what
+# self-upgrade-deadline.service does once the deadline has passed instead. Each
+# boot's system is logged to $root/boots.
 boot() {
   local entry generation system tries=0
   while :; do
@@ -75,6 +77,11 @@ boot() {
   ln -sfn "$system" "$root/run/booted-system"
   ln -sfn "$system" "$root/run/current-system"
   if [[ -e $system/unhealthy ]]; then rm -f "$root/healthy"; else touch "$root/healthy"; fi
+  if [[ -e $system/hangs ]]; then
+    : >"$root/calls"
+    [[ ! -e $root/state/pending ]] || run "deadline=1620" "$scripts/deadline.sh"
+    return
+  fi
   : >"$root/calls"
   run "attempts=3" "$scripts/lib.sh" "$scripts/verify.sh"
 }
@@ -221,5 +228,27 @@ boot
 boot
 expect_boots flaky flaky
 expect_kept flaky "$flaky"
+
+begin "a release that hangs on its way up: rebooted at the deadline onto the kept release, which rolls it back"
+firmware
+fresh_install "$(release installed)"
+boot
+good=$(publish "$(release good)")
+upgrade
+boot
+expect_kept good "$good"
+: >"$root/boots"
+hanging=$(publish "$(release hanging hangs)")
+upgrade
+expect_called "systemctl reboot"
+boot
+expect_output "upgrade to $hanging still undecided"
+expect_called "systemctl reboot"
+boot
+expect_output "upgrade to $hanging never finished booting"
+expect_not_called "systemctl reboot"
+expect_boots hanging good
+expect_kept good "$good"
+grep -qxF "$hanging" "$root/state/bad-revs" || fail "$hanging is not in bad-revs"
 
 finish

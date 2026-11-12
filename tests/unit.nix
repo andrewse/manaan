@@ -28,6 +28,7 @@ in
 {
   unit-upgrade = scriptTest "upgrade" ../modules/self-upgrade "upgrade.test.sh";
   unit-verify = scriptTest "verify" ../modules/self-upgrade "verify.test.sh";
+  unit-deadline = scriptTest "deadline" ../modules/self-upgrade "deadline.test.sh";
   unit-install = scriptTest "install" ../installer "install.test.sh";
   unit-healthcheck = scriptTest "healthcheck" ../modules/healthchecks "healthcheck.test.sh";
   unit-service-command =
@@ -52,4 +53,5 @@ in
   unit-service-commands = moduleTest "service-commands" ../modules/service-commands/service-commands.test.nix;
   unit-self-upgrade = moduleTest "self-upgrade" ../modules/self-upgrade/self-upgrade.test.nix;
   unit-admin-login = moduleTest "admin-login" ../modules/admin-login/admin-login.test.nix;
+  unit-self-upgrade-watchdog = moduleTest "self-upgrade-watchdog" ../modules/self-upgrade/watchdog.test.nix;
 }
