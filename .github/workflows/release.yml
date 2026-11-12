@@ -10,14 +10,22 @@ permissions:
 
 jobs:
   # Machines deploy the release branch, so `make release` only moves it to a commit that passes `make check`.
+  # One run at a time, and a run queued behind another replaces any already waiting, so each
+  # run releases main as it is when the run starts, not the commit that queued it: a replaced
+  # run's commit is then released by the run that replaced it.
   release:
     runs-on: ubuntu-latest
-    concurrency: release
+    concurrency:
+      group: release
+      cancel-in-progress: false
     permissions:
       contents: write
+    outputs:
+      sha: ${{ steps.released.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       # The system tests boot the hosts in QEMU, under KVM, with the firmware
@@ -37,12 +45,18 @@ jobs:
 
       - run: make release
 
-  # The self-installing ISO for each host. It holds no secrets, so it is safe as a public artifact.
+      - id: released
+        run: echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+
+  # The self-installing ISO for each host, built from the commit just released. It holds no
+  # secrets, so it is safe as a public artifact.
   iso:
     needs: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.sha }}
       - uses: cachix/install-nix-action@v31
       - run: make isos
       - uses: actions/upload-artifact@v4
