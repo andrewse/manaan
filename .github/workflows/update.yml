@@ -9,11 +9,13 @@ permissions:
   contents: read
 
 jobs:
-  # A push made with the workflow's own token starts no other workflow, so `make update`
-  # checks and releases the update itself rather than leaving it to release.yml.
+  # Machines only deploy a release signed by an admin, and this job can't sign, so
+  # `make update` checks the new flake.lock and pushes it to the flake-update branch
+  # as a proposal, never to main or release. Its own concurrency group: it doesn't
+  # touch what release.yml does, and a later run only replaces the proposal.
   update:
     runs-on: ubuntu-latest
-    concurrency: release
+    concurrency: update
     permissions:
       contents: write
     env:

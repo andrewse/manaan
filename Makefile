@@ -34,7 +34,7 @@ TEST_SYSTEM := aarch64-linux
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help check release update fmt fmt-check build build-all test-unit test-integration system-image test-system test-system-all vm iso isos lock enroll secret rekey status
+.PHONY: help check release signed update fmt fmt-check build build-all test-unit test-integration system-image test-system test-system-all vm iso isos lock enroll secret rekey status
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-17s %s\n", $$1, $$2}'
@@ -42,19 +42,34 @@ help: ## List targets
 check: fmt-check build-all test-unit test-integration test-system-all ## Everything CI runs before releasing
 
 # Machines deploy origin's release branch, so it only moves to a commit that is on
-# main and passes check. A plain push only fast-forwards, so a late run can't move it back.
-release: check ## Fast-forward origin's release to HEAD, once HEAD is on origin's main
+# main, is signed by an admin, and passes check. A plain push only fast-forwards, so a
+# late run can't move it back.
+release: signed check ## Fast-forward origin's release to HEAD, once HEAD is signed and on origin's main
 	git fetch --quiet origin main
 	@git merge-base --is-ancestor HEAD FETCH_HEAD || { echo "HEAD is not on origin's main; push it there first"; exit 1; }
 	git push origin HEAD:refs/heads/release
 
-update: ## Update flake.lock; if an input moved and check passes, push it to origin's main and release it
+# The machines refuse a release not signed by a key in ssh/, so release refuses it
+# first. The allowed signers are made the way modules/self-upgrade makes the machines'
+# (each key, as its user, for git only), in awk rather than Nix so this needs no eval.
+signed: ## Check HEAD is signed by an admin's SSH key, in ssh/
+	@signers=$$(mktemp) && trap 'rm -f "$$signers"' EXIT && \
+	for f in ssh/*; do \
+		[ -f "$$f" ] && [ "$${f##*/}" != default.nix ] || continue; \
+		awk -v user="$${f##*/}" '!/^[[:space:]]*(#|$$)/ { sub(/^[[:space:]]+/, ""); print user " namespaces=\"git\" " $$0 }' "$$f"; \
+	done >"$$signers" && \
+	git -c gpg.format=ssh -c gpg.ssh.allowedSignersFile="$$signers" verify-commit HEAD || \
+		{ echo "HEAD is not signed by a key in ssh/; machines would refuse it, so it is not released"; exit 1; }
+
+# The update can't be signed where it is made, so it is only proposed: the user lands
+# flake-update through the merge queue, whose squash commit they sign, and that releases it.
+update: ## Update flake.lock; if an input moved and check passes, push it to origin's flake-update branch
 	@before=$$(git rev-parse HEAD); \
 	$(NIX) flake update --commit-lock-file --option commit-lock-file-summary 'flake: update inputs' || exit 1; \
 	if [ "$$(git rev-parse HEAD)" = "$$before" ]; then echo "flake.lock is up to date"; exit 0; fi; \
 	$(MAKE) --no-print-directory check && \
-	git push origin HEAD:refs/heads/main && \
-	$(MAKE) --no-print-directory release
+	git push --force origin HEAD:refs/heads/flake-update && \
+	echo "pushed to origin's flake-update; land it through the merge queue to release it"
 
 fmt: ## Format all nix files
 	$(NIX) fmt -- $$(git ls-files '*.nix')

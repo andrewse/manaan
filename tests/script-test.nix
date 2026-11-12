@@ -15,6 +15,8 @@ pkgs.runCommand name
   {
     nativeBuildInputs = [
       pkgs.git
+      # ssh-keygen, for the tests that sign commits.
+      pkgs.openssh
       pkgs.shellcheck
     ];
   }

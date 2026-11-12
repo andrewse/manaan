@@ -9,6 +9,11 @@ let
     evalModules [
       ./default.nix
       { boot.loader.systemd-boot.enable = true; }
+      # modules/system/users.nix, which the signers default to.
+      {
+        options.machine.users = lib.mkOption { type = with lib.types; attrsOf (listOf str); };
+        config.machine.users.alice = [ "ssh-ed25519 AAAAalice alice@laptop" ];
+      }
       config
     ];
   enabled = eval { machine.selfUpgrade.enable = true; };
@@ -67,6 +72,35 @@ in
       ];
       emergencyMode = false;
     };
+  };
+
+  "a release must be signed by an admin's key, as that admin, for git only" = {
+    expr =
+      (eval {
+        machine.selfUpgrade.enable = true;
+        machine.users.bob = [
+          "ssh-ed25519 AAAAbob1 bob@desktop"
+          "ssh-rsa AAAAbob2"
+        ];
+      }).machine.selfUpgrade.allowedSignersFile.text;
+    expected = ''
+      alice namespaces="git" ssh-ed25519 AAAAalice alice@laptop
+      bob namespaces="git" ssh-ed25519 AAAAbob1 bob@desktop
+      bob namespaces="git" ssh-rsa AAAAbob2
+    '';
+  };
+
+  "no one to sign a release, so nothing could ever deploy: refused" = {
+    expr = map (a: a.message) (
+      lib.filter (a: !a.assertion && lib.hasPrefix "machine.selfUpgrade" a.message)
+        (eval {
+          machine.selfUpgrade.enable = true;
+          machine.users = lib.mkForce { nobody = [ ]; };
+        }).assertions
+    );
+    expected = [
+      "machine.selfUpgrade.signers has no keys, so no release could ever be deployed."
+    ];
   };
 
   "no systemd-boot, so no one-shot boot entries: refused" = {

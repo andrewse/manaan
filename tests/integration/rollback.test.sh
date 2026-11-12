@@ -79,25 +79,31 @@ boot() {
 }
 
 # As in upgrade.test.sh, the release branch is a local repo whose commits name
-# a system instead of building one.
+# a system instead of building one, each signed by the one key the allowed
+# signers file trusts.
+keys=$(mktemp -d)
+ssh-keygen -q -t ed25519 -N "" -C admin@test -f "$keys/admin"
+echo "admin namespaces=\"git\" $(cat "$keys/admin.pub")" >"$keys/allowed_signers"
 build=$(
   cat <<'EOF'
 build_system() {
-  git -C "$url" show "$1:system"
+  git -C "$clone" show "$1:system"
 }
 EOF
 )
 upgrade() {
   : >"$root/calls"
-  run "url=$(printf %q "$root/release") branch=release"$'\n'"$build" "$scripts/lib.sh" "$scripts/upgrade.sh"
+  run "url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers")"$'\n'"$build" \
+    "$scripts/lib.sh" "$scripts/upgrade.sh"
 }
 
-# publish <system>: commits <system> to the release branch. Prints the commit.
+# publish <system>: commits <system> to the release branch, signed. Prints the commit.
 publish() {
   [[ -d $root/release ]] || git init -q -b release "$root/release"
   echo "$1" >"$root/release/system"
   git -C "$root/release" add system
-  git -C "$root/release" -c user.name=ci -c user.email=ci@localhost commit -q -m "$1"
+  git -C "$root/release" -c user.name=ci -c user.email=ci@localhost \
+    -c gpg.format=ssh -c "user.signingkey=$keys/admin" commit -S -q -m "$1"
   git -C "$root/release" rev-parse HEAD
 }
 

@@ -21,20 +21,23 @@ from machine import until
 class Upgrades:
     """Plays CI, publishing releases to the branch, and watches the host take them."""
 
-    def __init__(self, host, releases):
+    def __init__(self, host, releases, key):
         self.host = host
         self.repo = releases / "release.git"
+        # The admin key the host trusts to sign a release (tested.nix).
+        self.key = key
         self.boots = len(host.boots())
         self.boot = host.boot_id()
         # The release the host has confirmed and keeps: (commit, system).
         self.kept = None
 
     def publish(self, system):
-        """Commits `system` to the release branch; returns the commit."""
+        """Commits `system` to the release branch, signed; returns the commit."""
         git = ["git", "-C", self.repo, "-c", "user.name=ci", "-c", "user.email=ci@localhost"]
+        sign = ["-c", "gpg.format=ssh", "-c", f"user.signingkey={self.key}"]
         (self.repo / "system").write_text(system + "\n")
         subprocess.run([*git, "add", "system"], check=True)
-        subprocess.run([*git, "commit", "-q", "-m", system], check=True)
+        subprocess.run([*git, *sign, "commit", "-S", "-q", "-m", system], check=True)
         return subprocess.run([*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
 
     def reconnect(self, boots=1):
@@ -79,9 +82,9 @@ class Upgrades:
 
 
 @pytest.fixture(scope="module")
-def upgrades(boot, releases, image):
+def upgrades(boot, releases, image, key):
     host = boot(releases=releases)
-    upgrades = Upgrades(host, releases)
+    upgrades = Upgrades(host, releases, key)
     upgrades.booted(image["installed"])
     return upgrades
 

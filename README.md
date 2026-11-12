@@ -4,15 +4,18 @@ NixOS configurations for my machines. Each machine pulls this repo and upgrades
 itself; nothing is pushed to machines.
 
 ```
-push to main ─► CI, `make release`: format, build every host, boot every host in a VM
-                 │                   and test it
+push to main ─► CI, `make release`: check main's tip is signed by a key in ssh/, format,
+                 │                   build every host, boot every host in a VM and test it
                  │ pass
                  ▼
-               CI fast-forwards `release` ◄─ every Monday, CI, `make update`: update flake.lock;
-                 │                           if an input moved and it passes the same checks,
-                 │                           push it to main and release it
-machine ◄─ self-upgrade.timer: build release, boot it once, healthcheck,
-           keep it or roll back
+               CI fast-forwards `release`     every Monday, CI, `make update`: update flake.lock;
+                 │                            if an input moved and it passes the same checks,
+                 │                            push it to `flake-update`, to land through the
+                 │                            merge queue like any other change
+                 ▼
+machine ◄─ self-upgrade.timer: fetch release, refuse it unless signed by a key in ssh/
+           and descended from the deployed commit, build it, boot it once,
+           healthcheck, keep it or roll back
 ```
 
 ## Layout
@@ -89,6 +92,38 @@ where it runs: origin and its credentials, the git identity (`GIT_AUTHOR_*` in C
 whatever `make check` can run there, so on a Mac `make update` commits the new lock and
 stops at `check`, before pushing anything.
 
+### Signed releases
+
+A machine only deploys a `release` tip signed with an SSH key in `ssh/`, and `make
+release` (`make signed` on its own) refuses to move `release` to a commit that isn't. So
+every commit that reaches main must be signed by an admin, which means the commit the
+merge queue squashes each change into: sign with git's SSH signing, in the checkout the
+queue drains from,
+
+```bash
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/id_ed25519.pub   # its public key must be in ssh/<you>
+git config commit.gpgsign true
+```
+
+(`--global` for every repository). The key signs through ssh-agent, or prompts for its
+passphrase, so a drain left to run unattended needs the key in the agent.
+`git log --show-signature -1` checks it.
+
+CI can't sign, so the weekly `make update` doesn't release: once the new flake.lock passes
+`make check` it force-pushes it to the `flake-update` branch, as a proposal, and stops. To
+take it, land its commit through the merge queue like any other change, which signs it:
+
+```bash
+git fetch origin flake-update
+make queue-worktree BRANCH=flake-update        # from main, not FROM= it: that would
+cd .worktrees/<id>                             # leave the lock commit out of the entry
+git cherry-pick origin/flake-update
+M="flake: update inputs
+
+..." make queue-submit
+```
+
 ## Testing
 
 Three categories, each a make target. Unit and integration tests are the flake's checks,
@@ -142,9 +177,16 @@ NZBHydra2, 5 for the rest), fail an unhealthy one at once, and stop waiting afte
 the first failure. The upgrade gate only asks for an answer short of a server error,
 so a login page counts; Gatus checks the answer itself.
 
-`self-upgrade.timer` checks the `release` branch every 30 minutes. A new commit
-that changes the system is built, made a **one-shot** boot entry while the
-running system stays the default, and rebooted into. On that boot:
+`self-upgrade.timer` fetches the `release` branch every 30 minutes, into a clone
+of its own at `/var/lib/self-upgrade/repo`. A new tip is refused unless it is
+signed by a key in `ssh/` (`machine.selfUpgrade.signers`, the admins by default)
+and descends from the deployed commit, so a release can't be forged or rolled
+back by whoever can push the branch; a refused tip fails `self-upgrade.service`,
+saying why, and is refused again on every run until the branch moves past it. A
+fresh install has no deployed commit, so takes any signed tip. Otherwise the tip
+is built from that clone, exactly the commit verified, and if it changes the
+system, made a **one-shot** boot entry while the running system stays the
+default, and rebooted into. On that boot:
 
 - healthchecks pass: the new system becomes the default.
 - healthchecks fail: roll back to the previous system and reboot.
@@ -152,8 +194,9 @@ running system stays the default, and rebooted into. On that boot:
   (`panic=10`, `boot.panic_on_fail`) into the default, which is still the old system.
 
 Failed commits are recorded in `/var/lib/self-upgrade/bad-revs` and skipped until
-`release` moves. A system that has already been confirmed is never rolled back
-further, so a failure unrelated to an upgrade won't cause a reboot loop.
+`release` moves; refused ones were never tried, so are not recorded there. A system
+that has already been confirmed is never rolled back further, so a failure unrelated
+to an upgrade won't cause a reboot loop.
 `make status HOST=manaan` shows the state.
 
 Data is not covered by rollback. Snapshot the zvol from TrueNAS.

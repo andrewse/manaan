@@ -1,14 +1,18 @@
 # Pull-based upgrades with automatic rollback.
 #
-#   self-upgrade.timer   -> self-upgrade.service: fetch the release branch, build it,
-#                           make it a one-shot boot entry (old system stays default), reboot
+#   self-upgrade.timer   -> self-upgrade.service: fetch the release branch into a
+#                           clone of its own; refuse its tip unless an admin signed
+#                           it and it descends from the deployed commit; build
+#                           exactly that commit, make it a one-shot boot entry (old
+#                           system stays default), reboot
 #   boot                 -> healthcheck.service -> self-upgrade-verify.service:
 #                           pass: make the new system the default
 #                           fail, or the new system never came up: roll back, remember
 #                           the commit as bad, and skip it until the branch moves
 #
-# State lives in /var/lib/self-upgrade: `rev` (deployed commit), `bad-revs`, and
-# `pending` (while an upgrade is on trial).
+# State lives in /var/lib/self-upgrade: `rev` (deployed commit), `bad-revs`,
+# `pending` (while an upgrade is on trial), and `repo`, the bare clone of the
+# branch that commits are verified and built from.
 {
   config,
   lib,
@@ -21,6 +25,15 @@ let
   cfg = config.machine.selfUpgrade;
   stateDir = "/var/lib/self-upgrade";
 
+  # git's gpg.ssh.allowedSignersFile: each key may sign commits (the "git"
+  # namespace) as the user it belongs to. The Makefile's `signed` target makes
+  # the same file from ssh/ for itself.
+  allowedSigners = lib.concatStrings (
+    lib.mapAttrsToList (
+      user: keys: lib.concatMapStrings (key: "${user} namespaces=\"git\" ${key}\n") keys
+    ) cfg.signers
+  );
+
   # Each script starts with lib.sh, after the shared variables and its own.
   mkScript =
     name: vars: parts:
@@ -30,6 +43,8 @@ let
         pkgs.coreutils
         pkgs.git
         pkgs.gnugrep
+        # ssh-keygen, which git verifies SSH signatures with.
+        pkgs.openssh
         config.nix.package
         config.systemd.package
       ];
@@ -44,27 +59,41 @@ in
 {
   options.machine.selfUpgrade = {
     enable = lib.mkEnableOption "pulling and applying this repo's release branch";
-    repo = lib.mkOption {
-      type = lib.types.str;
-      default = "andrewse/manaan";
-      description = "GitHub owner/repo to pull from.";
-    };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "https://github.com/${cfg.repo}";
-      defaultText = lib.literalExpression ''"https://github.com/''${config.machine.selfUpgrade.repo}"'';
-      description = "Git URL polled for new commits on the branch.";
+      default = "https://github.com/andrewse/manaan";
+      description = "Git URL the branch is fetched from, and so the system built.";
+    };
+    signers = lib.mkOption {
+      type = with lib.types; attrsOf (listOf str);
+      default = config.machine.users;
+      defaultText = lib.literalExpression "config.machine.users";
+      description = ''
+        Who may sign a release, and their SSH public keys: only a branch tip
+        signed by one of these keys is deployed.
+      '';
+    };
+    allowedSignersFile = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+      default = pkgs.writeText "allowed_signers" allowedSigners;
+      defaultText = lib.literalMD "made from `signers`";
+      description = ''
+        git's gpg.ssh.allowedSignersFile for checking a release's signature.
+        The VM test replaces it, as its key is made for each run.
+      '';
     };
     build = lib.mkOption {
       type = lib.types.str;
       internal = true;
       default = ''
         nix build --no-link --print-out-paths \
-          "github:${cfg.repo}/$1#nixosConfigurations.${config.networking.hostName}.config.system.build.toplevel"
+          "git+file://$clone?rev=$1#nixosConfigurations.${config.networking.hostName}.config.system.build.toplevel"
       '';
       description = ''
-        Shell commands that build this host's system at commit $1 and print its store path.
-        The VM test replaces it, as it has no GitHub to build from.
+        Shell commands that build this host's system at commit $1, which is in the
+        bare clone at $clone, and print its store path. The VM test replaces it,
+        as it can't build the host.
       '';
     };
     branch = lib.mkOption {
@@ -84,6 +113,10 @@ in
       {
         assertion = config.boot.loader.systemd-boot.enable;
         message = "machine.selfUpgrade relies on systemd-boot one-shot boot entries.";
+      }
+      {
+        assertion = lib.concatLists (lib.attrValues cfg.signers) != [ ];
+        message = "machine.selfUpgrade.signers has no keys, so no release could ever be deployed.";
       }
     ];
 
@@ -111,6 +144,7 @@ in
           mkScript "self-upgrade"
             {
               inherit (cfg) url branch;
+              signers = toString cfg.allowedSignersFile;
               current_system = "/run/current-system";
             }
             [

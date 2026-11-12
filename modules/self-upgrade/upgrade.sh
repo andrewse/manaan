@@ -1,11 +1,17 @@
 mkdir -p "$state"
 touch "$state/bad-revs"
 
-rev=$(git ls-remote "$url" "refs/heads/$branch" | cut -f1)
-[[ -n $rev ]] || {
-  echo "branch $branch not found in $url" >&2
+# The branch is fetched into a clone of our own, and the commit verified there
+# is the one built from there: nothing is fetched again between the two.
+clone=$state/repo
+[[ -d $clone ]] || git init -q --bare -b "$branch" "$clone"
+# Forced, so a rewritten branch is fetched and then refused below as a
+# downgrade, rather than failing the fetch.
+git -C "$clone" fetch -q --no-tags "$url" "+refs/heads/$branch:refs/heads/$branch" || {
+  echo "could not fetch branch $branch from $url" >&2
   exit 1
 }
+rev=$(git -C "$clone" rev-parse --verify -q "refs/heads/$branch^{commit}")
 
 deployed=$(cat "$state/rev" 2>/dev/null || true)
 if [[ $rev == "$deployed" ]]; then
@@ -15,6 +21,20 @@ fi
 if grep -qxF "$rev" "$state/bad-revs"; then
   echo "$rev failed before; waiting for a newer release"
   exit 0
+fi
+
+# A refused commit is not a failed trial: it is never built, nor marked bad,
+# and is refused again on every run until the branch moves past it. The unit
+# fails meanwhile, so `systemctl status` and the journal say why.
+refuse() {
+  echo "refusing $rev from $branch: $1" >&2
+  exit 1
+}
+git -C "$clone" -c gpg.format=ssh -c gpg.ssh.allowedSignersFile="$signers" verify-commit "$rev" ||
+  refuse "it is not signed by a key in $signers"
+# A fresh install has deployed nothing yet, so has nothing to descend from.
+if [[ -n $deployed ]] && ! git -C "$clone" merge-base --is-ancestor "$deployed" "$rev"; then
+  refuse "it does not descend from the deployed $deployed, so it would be a downgrade"
 fi
 
 echo "building $rev"
