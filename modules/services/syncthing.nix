@@ -7,6 +7,8 @@ let
   cfg = config.services.syncthing;
   guiPort = 8384;
   autostart = config.machine.autostart.syncthing;
+  # The module's own test for whether there is a syncthing-init at all.
+  settings = lib.converge (lib.filterAttrsRecursive (_: v: v != null && v != { })) cfg.settings;
 in
 {
   config = lib.mkIf cfg.enable {
@@ -19,9 +21,11 @@ in
       overrideFolders = false;
     };
 
-    # Applies the settings above, and would start Syncthing: it runs once
-    # Syncthing is started. guiAddress means the unit is always there.
-    systemd.services.syncthing-init = lib.mkIf (!autostart) {
+    # Applies services.syncthing.settings, and would start Syncthing: it runs
+    # once Syncthing is started instead. The module only has the unit once a
+    # host gives Syncthing settings, which the options above are not, and
+    # without them this alone would make one with nothing to run.
+    systemd.services.syncthing-init = lib.mkIf (!autostart && settings != { }) {
       wantedBy = lib.mkForce [ "syncthing.service" ];
     };
 

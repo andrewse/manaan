@@ -103,4 +103,9 @@ in
       key = null;
     };
   };
+
+  "syncthing has no init unit, since manaan gives it no settings to apply" = {
+    expr = config.systemd.services ? syncthing-init;
+    expected = false;
+  };
 }
