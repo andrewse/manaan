@@ -17,9 +17,12 @@ endef
 # records the worktree's path in turn.
 GIT_COMMON := $(shell git rev-parse --path-format=absolute --git-common-dir)
 # out/ is the one place it writes: the system tests' images are copied there.
+# The daemon's socket is in the container, not the volume, so two runs at once
+# each talk to their own daemon rather than one finding the other's gone.
 DOCKER_NIX := docker run --rm --platform linux/arm64 -w "$(CURDIR)" -v "$(CURDIR)":"$(CURDIR)":ro \
 	-v "$(GIT_COMMON)":"$(GIT_COMMON)":ro -v "$(CURDIR)/out":"$(CURDIR)/out" \
-	-v machine-configs-nix:/nix -e NIX_CONFIG nixos/nix:latest
+	-v machine-configs-nix:/nix -e NIX_CONFIG -e NIX_DAEMON_SOCKET_PATH=/tmp/nix-daemon.socket \
+	nixos/nix:latest
 ifneq ($(shell command -v nix 2>/dev/null),)
 in-nix = $(1)
 TEST_NIX := $(NIX)
@@ -27,7 +30,17 @@ TEST_FLAKE := .
 TEST_SYSTEM := $(SYSTEM)
 else
 export NIX_CONFIG := $(LOCAL_NIX_CONFIG)
-in-nix = $(DOCKER_NIX) sh -c 'git config --global --add safe.directory "*" && $(1)'
+# Only the daemon runs as root, so only it can write the store: the command runs
+# as a user of its own, which the store refuses as on any multi-user Nix. The
+# volume's store was root's alone before, and the daemon takes it over as it is.
+# The daemon's settings stay with the daemon; given to the client too, it warns
+# that an untrusted user may not set them.
+in-nix = $(DOCKER_NIX) sh -c 'nix-daemon >/dev/null 2>&1 & \
+	until nix store info --store daemon >/dev/null 2>&1; do kill -0 $$! || exit 1; sleep 0.1; done; \
+	install -d -o 1000 -g 1000 /tmp/home && \
+	exec chroot --userspec=1000:1000 --skip-chdir / env HOME=/tmp/home NIX_REMOTE=daemon \
+		NIX_CONFIG="experimental-features = nix-command flakes" sh -c "$$1"' \
+	- 'git config --global --add safe.directory "*" && $(1)'
 TEST_NIX := nix
 TEST_FLAKE := git+file://$(CURDIR)
 TEST_SYSTEM := aarch64-linux
