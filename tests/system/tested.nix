@@ -3,10 +3,8 @@
 { lib, ... }:
 
 {
-  # Needs a real auth key and the internet.
+  # Needs a login and the internet.
   services.tailscale.enable = lib.mkForce false;
-  # The VM has no host key to decrypt with.
-  machine.secrets.enable = false;
   # No file server: each share is a local directory.
   machine.localShares = true;
 

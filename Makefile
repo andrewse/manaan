@@ -2,7 +2,6 @@ HOSTS  := $(notdir $(wildcard hosts/*))
 HOST   ?= manaan
 SYSTEM := x86_64-linux
 NIX    := nix --extra-experimental-features 'nix-command flakes'
-AGENIX := $(NIX) run github:ryantm/agenix --
 
 # Where the tests' Nix runs: Nix itself, or on a Mac without it, Nix in an arm64
 # container, its store kept in a volume between runs. Nix only builds there; the
@@ -49,7 +48,7 @@ TEST_SYSTEM := aarch64-linux
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help check release signed update fmt fmt-check build build-all test-unit test-integration system-image test-system test-system-all vm iso isos lock enroll secret rekey status
+.PHONY: help check release signed update fmt fmt-check build build-all test-unit test-integration system-image test-system test-system-all vm iso isos lock status
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-17s %s\n", $$1, $$2}'
@@ -143,22 +142,6 @@ isos: ## Build every host's self-installing ISO into out/
 
 lock: ## Update flake.lock
 	$(NIX) flake update
-
-enroll: ## After HOST's first boot: trust its host key and re-encrypt secrets for it (ADDR=<ip>)
-	@test -n "$(ADDR)" || { echo "usage: make enroll HOST=manaan ADDR=<ip>"; exit 1; }
-	ssh-keyscan -t ed25519 $(ADDR) 2>/dev/null | cut -d' ' -f2- > hosts/$(HOST)/host_key.pub
-	@test -s hosts/$(HOST)/host_key.pub || { echo "no host key from $(ADDR)"; rm -f hosts/$(HOST)/host_key.pub; exit 1; }
-	@echo "Check this matches the 'host key:' line the installer printed on the console:"
-	@ssh-keygen -l -f hosts/$(HOST)/host_key.pub
-	$(MAKE) --no-print-directory rekey
-	@echo "Commit and push hosts/$(HOST)/host_key.pub and secrets/; $(HOST) picks them up on its next upgrade."
-
-secret: ## Create or edit secrets/NAME.age
-	@test -n "$(NAME)" || { echo "usage: make secret NAME=tailscale-authkey"; exit 1; }
-	cd secrets && $(AGENIX) -e $(NAME).age
-
-rekey: ## Re-encrypt all secrets after keys change
-	cd secrets && $(AGENIX) -r
 
 status: ## Show HOST's upgrade and healthcheck state
 	ssh $(HOST) 'systemctl status --no-pager healthcheck self-upgrade-verify self-upgrade self-upgrade.timer; \

@@ -1,7 +1,8 @@
-# Notifications through ntfy, once its secret exists (`make secret NAME=ntfy`:
-# NTFY_URL=https://ntfy.sh and NTFY_TOPIC=<topic> lines). A unit with
+# Notifications through ntfy, once an admin has put NTFY_URL=https://ntfy.sh
+# and NTFY_TOPIC=<topic> lines in /etc/credstore/ntfy on the machine; until
+# then nothing is sent. A unit with
 #   onFailure = config.machine.notify.onFailure;
-# sends its status when it fails; Gatus sends its alerts with the same secret.
+# sends its status when it fails; Gatus sends its alerts with the same file.
 {
   config,
   lib,
@@ -20,6 +21,10 @@ let
     ];
     text = ''
       unit=$1
+      if [ -z "''${NTFY_URL:-}" ] || [ -z "''${NTFY_TOPIC:-}" ]; then
+        echo "not notifying that $unit failed: no ntfy topic in ${cfg.environmentFile}"
+        exit 0
+      fi
       systemctl status --no-pager --lines=10 "$unit" |
         curl --silent --show-error --max-time 10 \
           --header "Title: ${config.networking.hostName}: $unit failed" \
@@ -31,27 +36,25 @@ in
 {
   options.machine.notify = {
     environmentFile = lib.mkOption {
-      type = with lib.types; nullOr str;
+      type = lib.types.str;
       readOnly = true;
-      default = config.machine.secrets.paths.ntfy or null;
-      description = "NTFY_URL and NTFY_TOPIC, once the ntfy secret exists.";
+      default = "/etc/credstore/ntfy";
+      description = "NTFY_URL and NTFY_TOPIC, on the machine, once an admin has put them there.";
     };
     onFailure = lib.mkOption {
       type = with lib.types; listOf str;
       readOnly = true;
-      default = lib.optional (cfg.environmentFile != null) "notify-failure@%n.service";
-      description = "A unit's onFailure that sends a notification, once the ntfy secret exists.";
+      default = [ "notify-failure@%n.service" ];
+      description = "A unit's onFailure that sends a notification, once ntfy's environmentFile exists.";
     };
   };
 
   config = {
-    machine.secrets.use = [ "ntfy" ];
-
-    systemd.services."notify-failure@" = lib.mkIf (cfg.environmentFile != null) {
+    systemd.services."notify-failure@" = {
       description = "Notify that %i failed";
       serviceConfig = {
         Type = "oneshot";
-        EnvironmentFile = cfg.environmentFile;
+        EnvironmentFile = "-${cfg.environmentFile}";
         ExecStart = "${lib.getExe notifyFailure} %i";
       };
     };

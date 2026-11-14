@@ -2,7 +2,6 @@
 {
   imports = [
     ./common.nix
-    ./secrets.nix
     ./users.nix
     ./firewall.nix
     ./sandbox.nix

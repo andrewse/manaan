@@ -44,7 +44,7 @@ def test_each_service_runs_as_its_own_user_and_writes_only_where_it_is_let(host,
         inside = f"nsenter -t {pid} -m"
         assert host.fails(f"{inside} touch /var/lib/.sandbox-probe"), f"{unit} can write /var/lib"
         for path in s["writes"]:
-            # `-` marks a path that may not be there, like a share whose secret isn't.
+            # `-` marks a path that may not be there.
             if path.startswith("-"):
                 path = path[1:]
                 if host.fails(f"{inside} test -d {path}"):

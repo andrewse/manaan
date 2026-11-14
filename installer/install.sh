@@ -18,8 +18,8 @@ for disk in "${disks[@]}"; do
 done
 
 # The ISO's sshd already serves the key the host will have, so it can be checked
-# against `make enroll` now, and SSH sees no change after the reboot. Without
-# it, stop before touching the disks.
+# against the first SSH connection now, and SSH sees no change after the
+# reboot. Without it, stop before touching the disks.
 if ! fingerprint=$(ssh-keygen -l -f "$hostKey.pub"); then
   echo "no SSH host key at $hostKey. Not installing $host."
   exit 1

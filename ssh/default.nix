@@ -1,7 +1,7 @@
 # Admin users and their SSH public keys: every other file in this directory is
 # named after a user and holds their keys in authorized_keys format. Each user
 # gets an account with passwordless sudo, and every key can push to the git
-# server. Plain builtins, as the agenix CLI reads this too (secrets/secrets.nix).
+# server.
 let
   entries = builtins.readDir ./.;
   users = builtins.filter (

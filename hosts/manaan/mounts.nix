@@ -20,12 +20,13 @@ let
     options = [ "nfsvers=4.2" ] ++ automount;
   };
 
-  secrets = config.machine.secrets.paths;
+  # `username=` and `password=` lines, put there by an admin once the machine
+  # is running; until then the SMB shares fail to mount when accessed.
   cifs = share: {
     device = "//${endor}/${share}";
     fsType = "cifs";
     options = [
-      "credentials=${secrets.smb-credentials}"
+      "credentials=/etc/credstore/smb-credentials"
       "iocharset=utf8"
       "uid=3000"
       "gid=3000"
@@ -44,9 +45,6 @@ let
     "/mnt/endor/library" = nfs "media/library";
     "/mnt/endor/paperless" = nfs "documents/paperless";
     "/mnt/endor/repos" = nfs "repos";
-  }
-  # `username=` and `password=` lines (`make secret NAME=smb-credentials`).
-  // lib.optionalAttrs (secrets ? smb-credentials) {
     "/mnt/endor/stuff" = cifs "stuff";
     "/mnt/endor/downloads" = cifs "downloads";
   };
@@ -57,25 +55,22 @@ in
     lib.mapAttrs (_: _: { d.mode = "0777"; }) shares
   );
 
-  machine.secrets.use = [ "smb-credentials" ];
-
-  # Which service may write which share; `-` because the SMB shares are only
-  # there once their secret is. Syncthing's is in syncthing.nix.
+  # Which service may write which share. Syncthing's is in syncthing.nix.
   machine.sandbox = lib.mkMerge [
     (lib.mkIf config.services.sonarr.enable {
       sonarr.writes = [
         "/mnt/endor/series"
-        "-/mnt/endor/downloads"
+        "/mnt/endor/downloads"
       ];
     })
     (lib.mkIf config.services.radarr.enable {
       radarr.writes = [
         "/mnt/endor/movies"
-        "-/mnt/endor/downloads"
+        "/mnt/endor/downloads"
       ];
     })
     (lib.mkIf config.services.sabnzbd.enable {
-      sabnzbd.writes = [ "-/mnt/endor/downloads" ];
+      sabnzbd.writes = [ "/mnt/endor/downloads" ];
     })
   ];
 }

@@ -24,13 +24,12 @@
         openssh.authorizedKeys.keys = keys;
       }) config.machine.users
       // {
-        # Break-glass login on the TrueNAS console for when the network is down.
-        # root can never log in over SSH.
-        root.hashedPasswordFile = lib.mkIf (
-          config.machine.secrets.paths ? root-password
-        ) config.machine.secrets.paths.root-password;
+        # Break-glass login on the TrueNAS console for when the network is down,
+        # once an admin has put a hash there (`mkpasswd -m yescrypt`); until then
+        # root is locked. root can never log in over SSH.
+        root.hashedPasswordFile = "/etc/credstore/root-password";
       };
-
-    machine.secrets.use = [ "root-password" ];
+    # To make that hash on the machine itself.
+    environment.systemPackages = [ pkgs.mkpasswd ];
   };
 }

@@ -7,10 +7,6 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    agenix = {
-      url = "github:ryantm/agenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
@@ -18,7 +14,6 @@
       self,
       nixpkgs,
       disko,
-      agenix,
       ...
     }:
     let
@@ -42,7 +37,6 @@
       # Shared by the real machine and its VM test, so the test boots the same config.
       hostModules = name: [
         disko.nixosModules.disko
-        agenix.nixosModules.default
         machineLib
         ./modules
         ./hosts/${name}

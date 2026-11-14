@@ -24,15 +24,14 @@ machine ◄─ self-upgrade.timer: fetch release, refuse it unless signed by a k
 | --- | --- |
 | `flake.nix`, `flake.lock` | Inputs pinned to exact commits; same commit, same system |
 | `ssh/` | Admin users: one file per user, named after them, with their SSH public keys in `authorized_keys` format (also git server access) |
-| `hosts/<host>/` | Per-machine config, hardware, disk layout, `host_key.pub`, and the host's own services |
-| `modules/system/` | The OS itself, on every host: common settings, users, secrets, the firewall, notifications |
+| `hosts/<host>/` | Per-machine config, hardware, disk layout, and the host's own services |
+| `modules/system/` | The OS itself, on every host: common settings, users, the firewall, notifications |
 | `modules/healthchecks/` | The checks that gate every upgrade, declared by each module |
 | `modules/service-commands/` | A command per service, such as `sonarr logs` or `sonarr restart`, declared by each module |
 | `modules/self-upgrade/` | Pulling `release`, booting it once, keeping it or rolling back |
 | `modules/admin-login/` | The admin login Syncthing, SABnzbd and NZBHydra2 are given the first time they have none |
 | `modules/services/` | One file (or directory) per app or service, each set up once the host switches it on |
 | `lib/` | Functions the modules share, such as `mkScript` for their shell scripts |
-| `secrets/` | agenix-encrypted secrets and who can decrypt them |
 | `installer/` | Self-installing ISO, one per host |
 | `scripts/` | Dumping what the old Ubuntu manaan ran, to replicate it here (`fetch-inventory.sh`) |
 | `queue/` | The merge queue every change lands through (`make queue-help`) |
@@ -51,7 +50,9 @@ declares, under `lib.mkIf cfg.enable`:
 - its ports, in `machine.firewall.internalTCPPorts` (private networks and Tailscale only);
 - its health: `machine.healthchecks.services.<unit>.url` for a long-running
   service with a health endpoint, `machine.healthchecks.checks` for anything else;
-- its secrets, by name in `machine.secrets.use`, read from `machine.secrets.paths`;
+- its secrets, never in this repo: generated on the machine the first time the
+  service starts, or read from `/etc/credstore/<name>` once an admin has put them
+  there, and it must start without them;
 - the only paths it may write, in `machine.sandbox.<unit>.writes`: the rest of
   the file system is read-only to it, and it must run as a user of its own,
   not root (`machine.sandbox.<unit>.root` for the exception, with the reason).
@@ -296,19 +297,26 @@ For a TrueNAS VM:
    the host's own key, so ssh sees the same host key after the reboot.
    manaan uses DHCP: reserve its address on the router for that MAC.
    The MAC is also under the VM's NIC device in TrueNAS, so the reservation can be made first.
-3. `make enroll HOST=manaan ADDR=<vm ip>` fetches the host key, shows its
-   fingerprint to compare with the console, and re-encrypts secrets for it. Commit
-   and push; the machine picks up its secrets (Tailscale, root password, the
-   SMB login) on the next upgrade. Until then it is reachable only over SSH on the LAN.
+3. `ssh charles@<vm ip>`, checking the fingerprint ssh asks about matches the
+   console's `host key:` line, and set up its secrets (below). Until then it is
+   reachable only over SSH on the LAN.
 
-Secrets are created with `make secret NAME=tailscale-authkey` (a reusable,
-pre-approved key; until it exists, Tailscale isn't logged in, and its login isn't healthchecked) and `make secret NAME=root-password` (output of
-`mkpasswd -m yescrypt`). Syncthing has no secret: it makes its own keys on first start,
-and a reinstall gives it a new device ID to pair with. `make secret NAME=smb-credentials`
-takes the `username=`/`password=` lines for endor's SMB shares; until it exists those two
-shares aren't mounted. `make secret NAME=ntfy` (`NTFY_URL=https://ntfy.sh` and
-`NTFY_TOPIC=<topic>` lines) turns on notifications: a unit with a health endpoint, or
-the healthchecks, failing, and Gatus alerts. A reinstall creates a new host key, so enroll again.
+### Secrets
+
+No secret is ever in this repo. Each is either generated on the machine the first
+time it is needed (Syncthing's keys, Grafana's, and the web UIs' admin logins), or
+put on the running machine by an admin, in `/etc/credstore/`, which only root can
+read. A reinstall loses them all, so they are set up again; Syncthing then has a new
+device ID to pair with. Until each exists, what needs it does without:
+
+| What | How | Until then |
+| --- | --- | --- |
+| Tailscale | `sudo tailscale up`, once; the login is kept in `/var/lib/tailscale` | not on the tailnet |
+| root's console password | `mkpasswd -m yescrypt \| sudo tee /etc/credstore/root-password`, then `sudo /run/current-system/bin/switch-to-configuration switch`, or at the next boot | root is locked |
+| endor's SMB shares | `username=` and `password=` lines in `/etc/credstore/smb-credentials` | `stuff` and `downloads` fail to mount |
+| Notifications | `NTFY_URL=https://ntfy.sh` and `NTFY_TOPIC=<topic>` lines in `/etc/credstore/ntfy`, then `sudo systemctl restart gatus` | a unit with a health endpoint, or the healthchecks, failing, and Gatus alerts, send nothing |
+
+Make each file with `sudo install -m600 /dev/null <file>` before writing to it.
 
 ## One-time GitHub setup
 

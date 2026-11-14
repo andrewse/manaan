@@ -23,7 +23,7 @@ in
             description = ''
               Paths the unit may write. Its StateDirectory= and RuntimeDirectory=
               are writable anyway. A path starting with `-` is skipped if it
-              doesn't exist, as for a share whose secret hasn't been made yet.
+              doesn't exist, as for one only some hosts have.
             '';
           };
           root = lib.mkOption {

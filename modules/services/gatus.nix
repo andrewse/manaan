@@ -1,16 +1,17 @@
 # Gatus: a status page polling machine.healthchecks each minute, with history,
-# and alerts through ntfy once the ntfy secret exists: every service with a
-# health URL, and every enabled tcp and http check. unit and command checks
-# aren't something Gatus can poll. It runs on the machine it watches, so it
-# can't report that machine being down.
+# and alerts through ntfy once its file exists (../system/notify.nix): every
+# service with a health URL, and every enabled tcp and http check. unit and
+# command checks aren't something Gatus can poll. It runs on the machine it
+# watches, so it can't report that machine being down. It reads the file when
+# it starts, and without one has no ntfy topic, so ignores ntfy: restart it
+# once the file is made.
 { config, lib, ... }:
 
 let
   cfg = config.services.gatus;
   health = config.machine.healthchecks;
-  ntfy = config.machine.notify.environmentFile;
   port = 8090;
-  alerts = lib.optional (ntfy != null) { type = "ntfy"; };
+  alerts = [ { type = "ntfy"; } ];
   # A service that isn't started at boot would only ever be alerted on.
   started = lib.filterAttrs (unit: _: config.machine.autostart.${unit} or true) health.services;
   # Checks are already off when what they check doesn't start at boot.
@@ -48,16 +49,20 @@ in
   config = lib.mkIf cfg.enable {
     machine.autostart.gatus = lib.mkDefault false;
 
+    # Optional, so Gatus starts before there is one.
+    systemd.services.gatus.serviceConfig.EnvironmentFile = [
+      "-${config.machine.notify.environmentFile}"
+    ];
+
     services.gatus = {
-      environmentFile = ntfy;
       settings = {
         web.port = port;
         storage = {
           type = "sqlite";
           path = "/var/lib/gatus/data.db";
         };
-        # Gatus fills in ${...} from its environment, here the ntfy secret.
-        alerting = lib.mkIf (alerts != [ ]) {
+        # Gatus fills in ${...} from its environment, here ntfy's file.
+        alerting = {
           ntfy = {
             url = "\${NTFY_URL}";
             topic = "\${NTFY_TOPIC}";
