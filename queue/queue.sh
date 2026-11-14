@@ -547,8 +547,16 @@ orphaned_by() {
 # submitted -- then the recorded base is no longer an ancestor of the tip and
 # the range between them means nothing, so it is worked out again from where
 # the branch now stands.
+#
+# A rebase onto a newer main does not do that: the recorded base is still an
+# ancestor, and the range from it takes in everything that landed in between,
+# which the drain would then replay a second time. So the base also moves up to
+# the branch's merge-base with main whenever that is further along. A stacked
+# entry's base is its parent's tip, which is not on main, so it never moves --
+# and a stacked branch that MERGED main in is still replayed with main's
+# commits in it.
 entry_range() {
-    local id=$1 branch=$2 sha=$3 base tip parent
+    local id=$1 branch=$2 sha=$3 base tip parent onmain
     if git show-ref --verify --quiet "refs/heads/$branch"; then
         tip=$(git rev-parse "refs/heads/$branch")
     else
@@ -561,6 +569,12 @@ entry_range() {
             base=$(printf '%s' "$parent" | cut -f3)
         else
             base=$(git merge-base "$MAIN" "$tip" 2>/dev/null || true)
+        fi
+    elif [ -n "$base" ]; then
+        onmain=$(git merge-base "$MAIN" "$tip" 2>/dev/null || true)
+        if [ -n "$onmain" ] && [ "$onmain" != "$base" ] &&
+           git merge-base --is-ancestor "$base" "$onmain" 2>/dev/null; then
+            base=$onmain
         fi
     fi
     printf '%s\t%s\n' "$base" "$tip"

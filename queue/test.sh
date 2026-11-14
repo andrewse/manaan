@@ -442,6 +442,50 @@ git -C "$MSANDBOX" show-ref --verify --quiet refs/heads/api-on-master &&
 out=$(mq . list)
 contains 'queue is empty' "$out" 'and the queue is empty again'
 
+# --- an entry rebased after submitting ------------------------------------
+
+case_ 'an entry rebased onto master after submitting'
+
+# Its recorded base is still an ancestor after the rebase, so the range from it
+# would take in what landed in between, and the drain would replay that again.
+# Here that is an add of b.txt onto a master that has since changed b.txt: a
+# conflict, rather than the empty commit an unchanged b.txt would hide it as.
+wt_of() { printf '%s\n' "$1" | sed -n 's/^worktree  *//p'; }
+mcommit() { printf '%s\n' "$3" > "$MSANDBOX/$1/$2"; git -C "$MSANDBOX/$1" add "$2"
+            git -C "$MSANDBOX/$1" commit -q -m "$4"; }
+
+rdir=$(wt_of "$(mq . worktree api-rebased)"); rdir=${rdir#"$MSANDBOX"/}
+mcommit "$rdir" a.txt a 'api: add a'
+mq "$rdir" submit -m 'api: add a
+
+An entry its author rebases after submitting.' >/dev/null
+
+odir=$(wt_of "$(mq . worktree api-b)"); odir=${odir#"$MSANDBOX"/}
+mcommit "$odir" b.txt b 'api: add b'
+mq "$odir" submit -m 'api: add b
+
+Lands while the first entry waits.' >/dev/null
+mq . merge api-b >/dev/null
+
+git -C "$MSANDBOX/$rdir" rebase -q master
+contains 'a.txt' "$(mq . diff api-rebased --stat)" 'the rebased entry brings its own change'
+case "$(mq . diff api-rebased --stat)" in
+    *b.txt*) bad 'and not what landed before it was rebased' ;;
+    *) ok 'and not what landed before it was rebased' ;;
+esac
+
+odir=$(wt_of "$(mq . worktree api-c)"); odir=${odir#"$MSANDBOX"/}
+mcommit "$odir" b.txt c 'api: change b'
+mq "$odir" submit -m 'api: change b
+
+Lands after the rebase, changing what the first entry must not replay.' >/dev/null
+mq . merge api-c >/dev/null
+
+out=$(mq . drain 2>&1) || true
+contains 'landed 1' "$out" 'the rebased entry lands clean'
+equal "$(git -C "$MSANDBOX" show master:b.txt)" c 'without undoing what landed after the rebase'
+equal "$(git -C "$MSANDBOX" log -1 --format=%s master)" 'api: add a' 'as one commit of its own'
+
 # --- an entry its tests fail ----------------------------------------------
 
 case_ 'an entry the tests fail is left pending, and lands once fixed'
