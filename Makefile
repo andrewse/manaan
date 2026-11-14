@@ -17,9 +17,11 @@ endef
 # records the worktree's path in turn.
 GIT_COMMON := $(shell git rev-parse --path-format=absolute --git-common-dir)
 # out/ is the one place it writes: the system tests' images are copied there.
+# fmt is the exception, which rewrites the checkout itself.
+SRC_MODE := ro
 # The daemon's socket is in the container, not the volume, so two runs at once
 # each talk to their own daemon rather than one finding the other's gone.
-DOCKER_NIX := docker run --rm --platform linux/arm64 -w "$(CURDIR)" -v "$(CURDIR)":"$(CURDIR)":ro \
+DOCKER_NIX = docker run --rm --platform linux/arm64 -w "$(CURDIR)" -v "$(CURDIR)":"$(CURDIR)":$(SRC_MODE) \
 	-v "$(GIT_COMMON)":"$(GIT_COMMON)":ro -v "$(CURDIR)/out":"$(CURDIR)/out" \
 	-v machine-configs-nix:/nix -e NIX_CONFIG -e NIX_DAEMON_SOCKET_PATH=/tmp/nix-daemon.socket \
 	nixos/nix:latest
@@ -84,11 +86,13 @@ update: ## Update flake.lock; if an input moved and check passes, push it to ori
 	git push --force origin HEAD:refs/heads/flake-update && \
 	echo "pushed to origin's flake-update; land it through the merge queue to release it"
 
+# The formatter is the flake's, so without Nix it runs in Docker like the tests.
+fmt: SRC_MODE := rw
 fmt: ## Format all nix files
-	$(NIX) fmt -- $$(git ls-files '*.nix')
+	$(call in-nix,$(TEST_NIX) fmt -- $$(git ls-files "*.nix"))
 
 fmt-check: ## Check formatting, and that no nix file is over 300 lines
-	$(NIX) fmt -- --check $$(git ls-files '*.nix')
+	$(call in-nix,$(TEST_NIX) fmt -- --check $$(git ls-files "*.nix"))
 	@git ls-files '*.nix' | xargs wc -l | awk '$$2 != "total" && $$1 > 300 { print $$2 " is " $$1 " lines; split it to 300 or fewer"; long = 1 } END { exit long }'
 
 build: ## Build HOST's system
