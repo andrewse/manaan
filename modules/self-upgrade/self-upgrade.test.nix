@@ -18,6 +18,26 @@ let
     ];
   enabled = eval { machine.selfUpgrade.enable = true; };
   services = enabled.systemd.services;
+
+  # modules/services/git-server, switched on or off, with a repo on it to
+  # upgrade from.
+  fromGitServer =
+    gitServer:
+    eval {
+      options.machine.gitServer = {
+        enable = lib.mkOption { type = lib.types.bool; };
+        repoDir = lib.mkOption { type = lib.types.str; };
+      };
+      config.machine.gitServer = {
+        enable = gitServer;
+        repoDir = "/srv/repos";
+      };
+      config.machine.selfUpgrade = {
+        enable = true;
+        gitServerRepo = "manaan.git";
+      };
+    };
+  fallback = (fromGitServer true).systemd.services.self-upgrade-github;
 in
 {
   "verify runs on every boot, once the healthchecks have decided" = {
@@ -49,6 +69,33 @@ in
       false
       false
     ];
+  };
+
+  "from the git server, GitHub is a fallback started by hand, held back the same way" = {
+    expr = {
+      timer = (fromGitServer true).systemd.timers ? self-upgrade-github;
+      after = lib.elem "self-upgrade-verify.service" fallback.after;
+      wantedBy = fallback.wantedBy;
+      inherit (fallback) restartIfChanged;
+      inherit (fallback.unitConfig) ConditionPathExists;
+    };
+    expected = {
+      timer = false;
+      after = true;
+      wantedBy = [ ];
+      restartIfChanged = false;
+      ConditionPathExists = "!/var/lib/self-upgrade/pending";
+    };
+  };
+
+  "with no repo on the git server, there is no fallback: the timer's own is GitHub" = {
+    expr = services ? self-upgrade-github;
+    expected = false;
+  };
+
+  "a repo on a git server that is off: upgrades from GitHub, as with none" = {
+    expr = (fromGitServer false).systemd.services ? self-upgrade-github;
+    expected = false;
   };
 
   "garbage collection keeps the system to roll back to while an upgrade is on trial" = {

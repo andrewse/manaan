@@ -23,10 +23,14 @@ build_system() {
 }
 EOF
 )
-# upgrade [attempts]: runs upgrade.sh, giving a release 3 attempts unless told otherwise.
+# upgrade [attempts] [<var>=<value>...]: runs upgrade.sh, giving a release 3
+# attempts unless told otherwise, fetching $root/release with no upload-pack
+# or fallback of its own unless the vars, quoted, say otherwise.
 upgrade() {
-  run "attempts=${1:-3} url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers")"$'\n'"$build" \
-    "$scripts/lib.sh" "$scripts/upgrade.sh"
+  local vars
+  vars="attempts=${1:-3} url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers") upload_pack= fallback="
+  (($# < 2)) || vars+=" ${*:2}"
+  run "$vars"$'\n'"$build" "$scripts/lib.sh" "$scripts/upgrade.sh"
 }
 
 # publish <system> [admin|stranger|unsigned]: commits <system> to the release
@@ -211,6 +215,50 @@ expect_missing state/pending
 expect_not_called nix-env
 expect_not_called bootctl
 expect_not_called "systemctl reboot"
+
+begin "from a repo on this host's git server: read through its upload-pack, as its owner"
+old=$(system old) new=$(system new)
+installed "$old"
+rev=$(publish "$new")
+# Stands in for runuser -u git -- git-upload-pack.
+stub "$root/bin/as-git" as-git 'exec git-upload-pack "$@"'
+upgrade 3 upload_pack=as-git
+expect_status 0
+expect_called "as-git $(printf %q "$root/release")"
+expect_called "build $rev"
+expect_file state/pending "$rev $new $old"
+
+begin "the git server can't serve the release: fails, naming the fallback to start instead"
+old=$(system old)
+installed "$old"
+upgrade 3 "url=$(printf %q "$root/missing.git")" fallback=self-upgrade-github
+expect_failure
+expect_output "could not fetch branch release from $root/missing.git"
+expect_output "systemctl start self-upgrade-github"
+expect_not_called build
+expect_missing state/pending
+
+begin "with no fallback: fails, naming none"
+old=$(system old)
+installed "$old"
+upgrade 3 "url=$(printf %q "$root/missing.git")"
+expect_failure
+expect_output "could not fetch branch release"
+! grep -qF "systemctl start" <<<"$output" || fail "names a fallback"
+
+begin "another upgrade is already running: does nothing"
+old=$(system old) new=$(system new)
+installed "$old"
+rev=$(publish "$new")
+exec 8>"$root/state/lock"
+flock 8
+upgrade
+exec 8>&-
+expect_failure
+expect_output "another upgrade is already running"
+expect_not_called build
+expect_not_called nix-env
+expect_missing state/pending
 
 begin "already at the release: does nothing"
 old=$(system old)

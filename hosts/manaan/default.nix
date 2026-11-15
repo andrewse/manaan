@@ -17,7 +17,13 @@
   # The IDs that own the repos share on endor.
   users.users.git = lib.mkIf config.machine.gitServer.enable { uid = 3007; };
   users.groups.git = lib.mkIf config.machine.gitServer.enable { gid = 3010; };
-  machine.selfUpgrade.enable = true;
+  machine.selfUpgrade = {
+    enable = true;
+    # The release an admin pushes to ssh://git@manaan/manaan.git, rather than
+    # GitHub's; `systemctl start self-upgrade-github` takes GitHub's instead,
+    # for when the git server can't serve it.
+    gitServerRepo = "manaan.git";
+  };
 
   # Each set up in modules/services/.
   virtualisation.docker.enable = true;

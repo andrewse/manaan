@@ -17,6 +17,8 @@ pkgs.runCommand name
       pkgs.git
       # ssh-keygen, for the tests that sign commits.
       pkgs.openssh
+      # flock, for the tests that hold a script's lock.
+      pkgs.util-linux
       pkgs.shellcheck
     ];
   }

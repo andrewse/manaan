@@ -1,7 +1,7 @@
 # Shares on endor, the TrueNAS host this VM runs on. Each is mounted on first
 # access rather than at boot, so manaan boots whether or not endor is serving
-# them yet, and passes its healthchecks too -- but for the git server's, once it
-# starts at boot (autostart.nix), which looks into the repos share. In the
+# them yet, and passes its healthchecks too -- but for the git server's, which
+# starts at boot (autostart.nix) and looks into the repos share. In the
 # system tests each is a local directory instead, open to all as the SMB shares
 # are mounted.
 { config, lib, ... }:

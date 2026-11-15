@@ -1,14 +1,26 @@
 mkdir -p "$state"
 touch "$state/bad-revs"
 
+# self-upgrade and self-upgrade-github stage into the same state and system
+# profile, so only one may run at a time.
+exec 9>"$state/lock"
+flock --nonblock 9 || {
+  echo "another upgrade is already running" >&2
+  exit 1
+}
+
 # The branch is fetched into a clone of our own, and the commit verified there
 # is the one built from there: nothing is fetched again between the two.
 clone=$state/repo
 [[ -d $clone ]] || git init -q --bare -b "$branch" "$clone"
 # Forced, so a rewritten branch is fetched and then refused below as a
-# downgrade, rather than failing the fetch.
-git -C "$clone" fetch -q --no-tags "$url" "+refs/heads/$branch:refs/heads/$branch" || {
+# downgrade, rather than failing the fetch. A repo on this host's git server
+# is read through $upload_pack, as the user that owns it.
+fetch=(fetch -q --no-tags)
+[[ -z $upload_pack ]] || fetch+=(--upload-pack "$upload_pack")
+git -C "$clone" "${fetch[@]}" "$url" "+refs/heads/$branch:refs/heads/$branch" || {
   echo "could not fetch branch $branch from $url" >&2
+  [[ -z $fallback ]] || echo "\`systemctl start $fallback\` upgrades from the fallback instead" >&2
   exit 1
 }
 rev=$(git -C "$clone" rev-parse --verify -q "refs/heads/$branch^{commit}")

@@ -101,7 +101,7 @@ EOF
 )
 upgrade() {
   : >"$root/calls"
-  run "attempts=3 url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers")"$'\n'"$build" \
+  run "attempts=3 url=$(printf %q "$root/release") branch=release signers=$(printf %q "$keys/allowed_signers") upload_pack= fallback="$'\n'"$build" \
     "$scripts/lib.sh" "$scripts/upgrade.sh"
 }
 

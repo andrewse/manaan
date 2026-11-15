@@ -13,6 +13,9 @@ push to main ─► CI, `make release`: check main's tip is signed by a key in s
                  │                            push it to `flake-update`, to land through the
                  │                            merge queue like any other change
                  ▼
+               an admin pushes `release` to manaan's own git server
+                 │
+                 ▼
 machine ◄─ self-upgrade.timer: fetch release, refuse it unless signed by a key in ssh/
            and descended from the deployed commit, build it, boot it once,
            healthcheck, keep it or roll back
@@ -180,7 +183,17 @@ the first failure. The upgrade gate only asks for an answer short of a server er
 so a login page counts; Gatus checks the answer itself.
 
 `self-upgrade.timer` fetches the `release` branch every 30 minutes, into a clone
-of its own at `/var/lib/self-upgrade/repo`. A new tip is refused unless it is
+of its own at `/var/lib/self-upgrade/repo`. manaan fetches it from its own git
+server, `ssh://git@manaan/manaan.git` (`machine.selfUpgrade.gitServerRepo`), which
+CI can't reach, so an admin pushes `release` there once CI has moved it on GitHub:
+
+```bash
+git fetch origin release && git push ssh://git@manaan/manaan.git origin/release:refs/heads/release
+```
+
+When the git server can't serve it, `systemctl start self-upgrade-github` runs one
+upgrade from GitHub instead (`machine.selfUpgrade.url`); the timer stays on the
+git server. From either, a new tip is refused unless it is
 signed by a key in `ssh/` (`machine.selfUpgrade.signers`, the admins by default)
 and descends from the deployed commit, so a release can't be forged or rolled
 back by whoever can push the branch; a refused tip fails `self-upgrade.service`,

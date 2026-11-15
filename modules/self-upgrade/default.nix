@@ -12,9 +12,15 @@
 #                           again, until it has failed `attempts` times, and then
 #                           skips it until the branch moves
 #
+# The branch comes from `url`, GitHub, unless `gitServerRepo` names a repo on
+# this host's own git server: then the timer fetches it from there, and
+# `systemctl start self-upgrade-github` fetches it from `url` instead, for when
+# the git server can't serve it. Either is verified the same way.
+#
 # State lives in /var/lib/self-upgrade: `rev` (deployed commit), `bad-revs` (one
-# line per failed attempt), `pending` (while an upgrade is on trial), and `repo`,
-# the bare clone of the branch that commits are verified and built from.
+# line per failed attempt), `pending` (while an upgrade is on trial), `lock`
+# (while either is running), and `repo`, the bare clone of the branch that
+# commits are verified and built from.
 {
   config,
   lib,
@@ -26,6 +32,8 @@
 let
   cfg = config.machine.selfUpgrade;
   stateDir = "/var/lib/self-upgrade";
+  # A host that switches its git server off upgrades from url as before.
+  fromGitServer = cfg.gitServerRepo != null && config.machine.gitServer.enable;
 
   # git's gpg.ssh.allowedSignersFile: each key may sign commits (the "git"
   # namespace) as the user it belongs to. The Makefile's `signed` target makes
@@ -45,6 +53,8 @@ let
         pkgs.coreutils
         pkgs.git
         pkgs.gnugrep
+        # flock, and runuser for reading the git server's repo as git.
+        pkgs.util-linux
         # ssh-keygen, which git verifies SSH signatures with.
         pkgs.openssh
         config.nix.package
@@ -58,6 +68,43 @@ let
       // vars;
       parts = [ ./lib.sh ] ++ parts;
     };
+
+  # upgradeService <name> <description> <vars>: the unit that fetches the
+  # branch as <vars> say (`url`, `upload_pack`, `fallback`) and stages it.
+  upgradeService = name: description: vars: {
+    inherit description;
+    wants = [ "network-online.target" ];
+    after = [
+      "network-online.target"
+      "self-upgrade-verify.service"
+    ];
+    unitConfig.ConditionPathExists = "!${stateDir}/pending";
+    restartIfChanged = false;
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = lib.getExe (
+        mkScript name
+          (
+            {
+              inherit (cfg) branch;
+              signers = toString cfg.allowedSignersFile;
+              current_system = "/run/current-system";
+              upload_pack = "";
+              fallback = "";
+            }
+            // vars
+          )
+          [
+            ''
+              build_system() {
+              ${cfg.build}
+              }
+            ''
+            ./upgrade.sh
+          ]
+      );
+    };
+  };
 in
 {
   imports = [ ./watchdog.nix ];
@@ -67,7 +114,22 @@ in
     url = lib.mkOption {
       type = lib.types.str;
       default = "https://github.com/andrewse/manaan";
-      description = "Git URL the branch is fetched from, and so the system built.";
+      description = ''
+        Git URL the branch is fetched from, and so the system built. With
+        gitServerRepo set, only self-upgrade-github fetches from it.
+      '';
+    };
+    gitServerRepo = lib.mkOption {
+      type = with lib.types; nullOr str;
+      default = null;
+      example = "manaan.git";
+      description = ''
+        A repo on this host's own git server (machine.gitServer) to fetch the
+        branch from instead of url, read as the git user, as a pull through the
+        server would be. url is then only the fallback: nothing fetches from it
+        but `systemctl start self-upgrade-github`. Ignored while the git server
+        is off.
+      '';
     };
     signers = lib.mkOption {
       type = with lib.types; attrsOf (listOf str);
@@ -147,35 +209,23 @@ in
     ];
     systemd.enableEmergencyMode = false;
 
-    systemd.services.self-upgrade = {
-      description = "Pull and stage the ${cfg.branch} branch";
-      wants = [ "network-online.target" ];
-      after = [
-        "network-online.target"
-        "self-upgrade-verify.service"
-      ];
-      unitConfig.ConditionPathExists = "!${stateDir}/pending";
-      restartIfChanged = false;
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = lib.getExe (
-          mkScript "self-upgrade"
-            {
-              inherit (cfg) url branch;
-              signers = toString cfg.allowedSignersFile;
-              current_system = "/run/current-system";
-            }
-            [
-              ''
-                build_system() {
-                ${cfg.build}
-                }
-              ''
-              ./upgrade.sh
-            ]
-        );
-      };
-    };
+    systemd.services.self-upgrade =
+      if fromGitServer then
+        upgradeService "self-upgrade" "Pull and stage the ${cfg.branch} branch from this host's git server"
+          {
+            url = "${config.machine.gitServer.repoDir}/${cfg.gitServerRepo}";
+            upload_pack = "runuser -u git -- git-upload-pack";
+            fallback = "self-upgrade-github";
+          }
+      else
+        upgradeService "self-upgrade" "Pull and stage the ${cfg.branch} branch" { inherit (cfg) url; };
+
+    # Started by hand only, never by the timer.
+    systemd.services.self-upgrade-github = lib.mkIf fromGitServer (
+      upgradeService "self-upgrade-github" "Pull and stage the ${cfg.branch} branch from ${cfg.url}" {
+        inherit (cfg) url;
+      }
+    );
 
     systemd.timers.self-upgrade = {
       wantedBy = [ "timers.target" ];

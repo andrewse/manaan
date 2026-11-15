@@ -31,10 +31,13 @@
   };
   services.openssh.authorizedKeysFiles = [ "/run/tester-ssh/%u" ];
 
-  # The release branch is the runner's git daemon, standing in for GitHub,
-  # which QEMU forwards to this address. Each commit names a system already in
-  # the store rather than building one, as the VM can't build the host.
+  # The release branch is the runner's git daemon, which QEMU forwards to this
+  # address, standing in for GitHub and for the host's own git server, so the
+  # host's git server is not where it comes from here. Each commit names a
+  # system already in the store rather than building one, as the VM can't
+  # build the host.
   machine.selfUpgrade.url = "git://10.0.2.100/release.git";
+  machine.selfUpgrade.gitServerRepo = lib.mkForce null;
   machine.selfUpgrade.allowedSignersFile = "/run/tester-ssh/allowed_signers";
   machine.selfUpgrade.build = ''
     git -C "$clone" show "$1:system"

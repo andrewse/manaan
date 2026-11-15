@@ -19,6 +19,6 @@
     # gatus = true;
     # The git server answers over SSH either way; this adds its healthcheck,
     # which needs endor's repos share to exist and be up.
-    # git-server = true;
+    git-server = true;
   };
 }
