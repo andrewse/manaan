@@ -47,6 +47,9 @@ in
 
   config = {
     image.baseName = lib.mkForce "${host}-installer";
+    # The name NetworkManager sends with its DHCP requests, so the router sees
+    # the host during its install rather than a machine called nixos.
+    networking.hostName = host;
     isoImage.squashfsCompression = "zstd -Xcompression-level 6";
     # The target is ext4 on a zvol; the stock ISO's ZFS support isn't needed.
     boot.supportedFilesystems.zfs = lib.mkForce false;

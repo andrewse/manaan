@@ -308,7 +308,8 @@ For a TrueNAS VM:
    It shows what the console does: formatting, nixos-install copying the system,
    then `installed manaan, rebooting`, when the connection drops. The ISO serves
    the host's own key, so ssh sees the same host key after the reboot.
-   manaan uses DHCP: reserve its address on the router for that MAC.
+   manaan uses DHCP: reserve its address on the router for that MAC. The ISO
+   already asks for an address under the host's name, as the installed host does.
    The MAC is also under the VM's NIC device in TrueNAS, so the reservation can be made first.
 3. `ssh charles@<vm ip>`, checking the fingerprint ssh asks about matches the
    console's `host key:` line, and set up its secrets (below). Until then it is

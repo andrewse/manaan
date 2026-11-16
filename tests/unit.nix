@@ -54,4 +54,5 @@ in
   unit-self-upgrade = moduleTest "self-upgrade" ../modules/self-upgrade/self-upgrade.test.nix;
   unit-admin-login = moduleTest "admin-login" ../modules/admin-login/admin-login.test.nix;
   unit-self-upgrade-watchdog = moduleTest "self-upgrade-watchdog" ../modules/self-upgrade/watchdog.test.nix;
+  unit-installer = moduleTest "installer" ../installer/installer.test.nix;
 }
